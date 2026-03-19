@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Violet Agent 运作流程图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d0b1a;
+    color: #e8e0f5;
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    padding: 40px 24px 80px;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: #c8a8f0;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #7a6a9a;
+    margin-bottom: 48px;
+  }
+
+  /* ── 总体布局 ── */
+  .diagram {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* ── 区块 ── */
+  .section {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    position: relative;
+  }
+
+  .section-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 11px;
+    color: #5a4a7a;
+    letter-spacing: 3px;
+    padding: 16px 8px;
+    min-width: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #2a1e40;
+  }
+
+  .section-content {
+    flex: 1;
+    padding: 20px 24px;
+  }
+
+  /* ── 节点 ── */
+  .node {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    position: relative;
+    white-space: nowrap;
+  }
+  .node .icon { font-size: 15px; flex-shrink: 0; }
+
+  /* 节点颜色主题 */
+  .node-trigger  { background: #1e1040; border: 1.5px solid #5a3a8a; color: #c8a8f0; }
+  .node-process  { background: #0e1a30; border: 1.5px solid #2a5a9a; color: #90c0f0; }
+  .node-decision { background: #1a1a0e; border: 1.5px solid #7a6a20; color: #e0c860; border-radius: 6px; }
+  .node-action   { background: #0e2018; border: 1.5px solid #2a7a4a; color: #80e0a8; }
+  .node-send     { background: #201018; border: 1.5px solid #8a2a5a; color: #f0a0c0; }
+  .node-store    { background: #181818; border: 1.5px solid #4a4a4a; color: #b0b0b0; }
+  .node-error    { background: #1e0e0e; border: 1.5px solid #8a2a2a; color: #f09090; }
+
+  /* ── 箭头 ── */
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4a3a6a;
+    font-size: 18px;
+    height: 28px;
+    position: relative;
+  }
+  .arrow-label {
+    font-size: 10px;
+    color: #6a5a8a;
+    margin-left: 6px;
+    font-style: italic;
+  }
+
+  /* ── 行布局 ── */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .row-center { justify-content: center; }
+  .col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ── 分支框 ── */
+  .branch-box {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    justify-content: center;
+    margin: 8px 0;
+    flex-wrap: wrap;
+  }
+  .branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 1px dashed #2a2040;
+    min-width: 200px;
+  }
+  .branch-title {
+    font-size: 11px;
+    color: #6a5a8a;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  /* ── 分隔线 ── */
+  .divider {
+    border: none;
+    border-top: 1px solid #1e1530;
+    margin: 24px 0;
+  }
+
+  /* ── 图例 ── */
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid #1e1530;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #7a6a9a;
+  }
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    border: 1.5px solid;
+  }
+
+  /* ── 注释气泡 ── */
+  .note {
+    font-size: 11px;
+    color: #5a4a7a;
+    padding: 6px 12px;
+    border-left: 2px solid #3a2a5a;
+    background: #100c1e;
+    border-radius: 0 6px 6px 0;
+    max-width: 320px;
+    line-height: 1.6;
+  }
+
+  /* ── 连接线（水平） ── */
+  .hline {
+    flex: 1;
+    height: 1.5px;
+    background: linear-gradient(to right, #3a2a5a, #2a1e40);
+    min-width: 20px;
+    max-width: 40px;
+  }
+  .arrow-h::after {
+    content: '→';
+    font-size: 16px;
+    color: #4a3a6a;
+    margin: 0 4px;
+  }
+
+  .highlight-box {
+    border: 1px solid #3a2a5a;
+    border-radius: 12px;
+    padding: 20px 24px;
+    background: #0c0918;
+    margin: 12px 0;
+  }
+
+  .tag {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .tag-new { background: #1a3a1a; color: #60c060; border: 1px solid #2a6a2a; }
+  .tag-warn { background: #2a1a0a; color: #e0a040; border: 1px solid #5a3a0a; }
+</style>
+</head>
+<body>
+
+<h1>🌸 Violet Agent 运作流程图</h1>
+<p class="subtitle">claw-agents · 整体架构 · 2026-03</p>
+
+<div class="diagram">
+
+  <!-- ══ 启动阶段 ══ -->
+  <div class="highlight-box">
+    <div class="row row-center" style="margin-bottom:12px">
+      <span style="font-size:12px;color:#5a4a7a;letter-spacing:2px">── 启动阶段 ──</span>
+    </div>
+    <div class="row row-center">
+      <div class="node node-trigger"><span class="icon">🚀</span>Node.js 进程启动 main.js</div>
+    </div>
+    <div class="arrow row-center">↓</div>
+    <div class="branch-box">
+      <div class="branch">
+        <div class="branch-title">① Agent 注册</div>
+        <div class="node node-process" style="font-size:12px">AgentManager.register(violet)</div>
+        <div style="font-size:11px;color:#5a6a8a;margin-top:4px">注入 runTurn 函数</div>
+      </div>
+      <div class="branch">
+        <div class="branch-title">② Cron 恢复</div>
+        <div class="node node-process" style="font-size:12px">CronManager.restoreFromStore()</div>
+        <div style="font-size:11px;color:#5a6a8a;margin-top:4px">从 tasks.json 恢复活跃任务</div>
+      </div>
+      <div class="branch">
+        <div class="branch-title">③ 心跳启动</div>
+        <div class="node node-process" style="font-size:12px">AgentManager.start(violet)</div>
+        <div style="font-size:11px;color:#5a6a8a;margin-top:4px">setInterval 每 5 分钟</div>
+      </div>
+      <div class="branch">
+        <div class="branch-title">④ HTTP 服务</div>
+        <div class="node node-process" style="font-size:12px">Express 监听 :3000</div>
+        <div style="font-size:11px;color:#5a6a8a;margin-top:4px">接收 Webhook 推送</div>
+      </div>
+    </div>
+    <div class="arrow row-center">↓ <span class="arrow-label">3 秒后立即触发一次心跳（唤醒）</span></div>
+  </div>
+
+  <div class="arrow row-center" style="height:36px;font-size:22px">↓</div>
+
+  <!-- ══ 两大触发路径 ══ -->
+  <div class="row row-center" style="gap:60px;align-items:flex-start">
+
+    <!-- 路径 A：心跳 -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:0;min-width:320px">
+      <div class="node node-trigger" style="background:#1a0e30;border-color:#7a3aaa">
+        <span class="icon">💓</span>路径 A · 自主心跳
+        <span class="tag tag-new" style="margin-left:8px">每5分钟</span>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="col">
+        <div class="node node-process">AgentManager._runAgentHeartbeat()</div>
+        <div class="arrow">↓</div>
+        <div class="node node-process">_runAgentTurn(inst, <span style="color:#f0c060">null</span>)</div>
+        <div class="arrow">↓</div>
+        <div class="highlight-box" style="min-width:280px;text-align:left">
+          <div class="branch-title" style="margin-bottom:8px">构建心跳 contextPrompt</div>
+          <div style="font-size:12px;color:#9a8ab0;line-height:1.8">
+            1. 检查当前时间（早晨/深夜/节假日）<br>
+            2. list_tasks 查看已有定时任务<br>
+            3. 决定是否主动发一条消息<br>
+            4. 重要事项 add_memory 记录
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="node node-process">agentLoop.runAgentTurn()</div>
+        <div class="arrow">↓ <span class="arrow-label">LLM 推理 + Tool 调用</span></div>
+        <div class="node node-decision">LLM 决策：需要主动联系用户？</div>
+        <div class="branch-box" style="margin-top:8px">
+          <div class="col">
+            <div style="font-size:11px;color:#7a9a5a">是</div>
+            <div class="node node-action" style="font-size:12px">调用 send_message tool</div>
+            <div class="arrow">↓</div>
+            <div class="node node-send" style="font-size:12px">messageRouter.sendMessage()</div>
+            <div class="arrow">↓</div>
+            <div class="node node-send" style="font-size:12px">api.sgroup.qq.com → QQ</div>
+          </div>
+          <div class="col">
+            <div style="font-size:11px;color:#7a5a5a">否</div>
+            <div class="node node-store" style="font-size:12px">安静等待下次心跳</div>
+          </div>
+        </div>
+        <div class="arrow" style="margin-top:8px">↓ <span class="arrow-label">也可调用其他 tool</span></div>
+        <div class="branch-box">
+          <div class="node node-action" style="font-size:11px">schedule_task<br><span style="color:#5a7a5a;font-size:10px">创建定时任务</span></div>
+          <div class="node node-action" style="font-size:11px">list_tasks<br><span style="color:#5a7a5a;font-size:10px">查看任务列表</span></div>
+          <div class="node node-action" style="font-size:11px">add_memory<br><span style="color:#5a7a5a;font-size:10px">记录记忆</span></div>
+          <div class="node node-action" style="font-size:11px">remove_task<br><span style="color:#5a7a5a;font-size:10px">删除任务</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 分隔 -->
+    <div style="width:1px;background:#1e1530;align-self:stretch;margin:0 8px"></div>
+
+    <!-- 路径 B：用户消息 -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:0;min-width:320px">
+      <div class="node node-trigger" style="background:#1a1000;border-color:#aa8a0a">
+        <span class="icon">💬</span>路径 B · 用户发消息
+        <span class="tag tag-warn" style="margin-left:8px">实时触发</span>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="col">
+        <div class="node node-process">QQ 开放平台推送 Webhook</div>
+        <div class="arrow">↓</div>
+        <div class="node node-process">POST /webhook/qq</div>
+        <div class="arrow">↓</div>
+        <div class="node node-process">qqAdapter.handleWebhookEvent()</div>
+        <div class="arrow">↓ <span class="arrow-label">提取 userId / content / msgId</span></div>
+        <div class="node node-process">messageRouter.setTarget('qq', openid)</div>
+        <div class="arrow">↓</div>
+        <div class="node node-process">agentManager.dispatchMessage()</div>
+        <div class="arrow">↓</div>
+        <div class="node node-decision">Agent 当前状态？</div>
+        <div class="branch-box" style="margin-top:8px">
+          <div class="col">
+            <div style="font-size:11px;color:#7a9a5a">idle</div>
+            <div class="node node-process" style="font-size:12px">_runAgentTurn(msg, platform, meta)</div>
+          </div>
+          <div class="col">
+            <div style="font-size:11px;color:#e0c060">running</div>
+            <div class="node node-decision" style="font-size:12px">messageQueue.push()</div>
+            <div style="font-size:10px;color:#6a5a4a;margin-top:4px">等当前 turn 结束后处理</div>
+          </div>
+        </div>
+        <div class="arrow" style="margin-top:8px">↓</div>
+        <div class="node node-process">构建 contextPrompt = userMessage</div>
+        <div class="arrow">↓</div>
+        <div class="node node-process">agentLoop.runAgentTurn()</div>
+        <div class="arrow">↓ <span class="arrow-label">LLM 生成回复文本</span></div>
+        <div class="node node-decision">result.content 有值？</div>
+        <div class="branch-box" style="margin-top:8px">
+          <div class="col">
+            <div style="font-size:11px;color:#7a9a5a">有</div>
+            <div class="node node-send" style="font-size:12px">messageRouter.sendMessage(<br>&nbsp;&nbsp;platform, content,<br>&nbsp;&nbsp;meta.openid, meta.msgId<br>)</div>
+            <div class="arrow">↓</div>
+            <div class="node node-send" style="font-size:12px">qqAdapter.sendFriendMessage()<br><span style="font-size:10px;color:#9a5a7a">被动回复，携带 msg_id</span></div>
+            <div class="arrow">↓</div>
+            <div class="node node-send" style="font-size:12px">api.sgroup.qq.com → QQ ✅</div>
+          </div>
+          <div class="col">
+            <div style="font-size:11px;color:#7a5a5a">无</div>
+            <div class="node node-error" style="font-size:12px">log error<br>"no content"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="arrow row-center" style="height:36px;font-size:22px">↓</div>
+
+  <!-- ══ 路径 C：定时任务触发 ══ -->
+  <div class="highlight-box">
+    <div class="row row-center" style="margin-bottom:12px">
+      <span style="font-size:12px;color:#5a4a7a;letter-spacing:2px">── 路径 C · 定时任务触发（CronManager）──</span>
+    </div>
+    <div class="row row-center">
+      <div class="node node-trigger" style="background:#001a1a;border-color:#0a8a8a">
+        <span class="icon">⏰</span>cron 表达式匹配（如 0 8 * * * 每天 8:00）
+      </div>
+    </div>
+    <div class="arrow row-center">↓</div>
+    <div class="row row-center">
+      <div class="node node-process">CronManager._executeTask(task)</div>
+      <div class="arrow-h"></div>
+      <div class="note">task 对象包含：action / content / platform / agentId</div>
+    </div>
+    <div class="arrow row-center">↓</div>
+    <div class="row row-center">
+      <div class="node node-action">executor(task) — 注入的执行函数</div>
+    </div>
+    <div class="arrow row-center">↓</div>
+    <div class="branch-box">
+      <div class="branch" style="border-color:#0a4a4a">
+        <div class="branch-title">action = "send_message"</div>
+        <div class="node node-send" style="font-size:12px">messageRouter.sendMessage()<br>直接发 task.content</div>
+        <div class="arrow">↓</div>
+        <div class="node node-send" style="font-size:12px">api.sgroup.qq.com → QQ</div>
+        <div style="font-size:11px;color:#5a8a7a;margin-top:6px">主动消息（无 msg_id）</div>
+      </div>
+      <div class="branch" style="border-color:#0a4a4a">
+        <div class="branch-title">action = "run_agent"</div>
+        <div class="node node-process" style="font-size:12px">agentManager.dispatchMessage()<br>让 LLM 自己生成内容</div>
+        <div class="arrow">↓</div>
+        <div class="node node-send" style="font-size:12px">（同路径 B 发送流程）</div>
+      </div>
+    </div>
+    <div class="arrow row-center">↓</div>
+    <div class="row row-center">
+      <div class="node node-store">taskStore.appendHistory(result)</div>
+      <div class="arrow-h"></div>
+      <div class="note">任务执行历史写入 tasks.json 持久化</div>
+    </div>
+  </div>
+
+  <div class="arrow row-center" style="height:36px;font-size:22px">↓</div>
+
+  <!-- ══ 存储层 ══ -->
+  <div class="highlight-box">
+    <div class="row row-center" style="margin-bottom:12px">
+      <span style="font-size:12px;color:#5a4a7a;letter-spacing:2px">── 存储层（所有路径共用）──</span>
+    </div>
+    <div class="branch-box">
+      <div class="branch">
+        <div class="branch-title">memory-store</div>
+        <div class="node node-store" style="font-size:12px">violet.json</div>
+        <div style="font-size:11px;color:#5a5a6a;margin-top:4px">对话历史 + 记忆事实<br>sanitizeToolMessages 防止 400</div>
+      </div>
+      <div class="branch">
+        <div class="branch-title">task-store</div>
+        <div class="node node-store" style="font-size:12px">tasks.json</div>
+        <div style="font-size:11px;color:#5a5a6a;margin-top:4px">定时任务持久化<br>重启后自动恢复</div>
+      </div>
+      <div class="branch">
+        <div class="branch-title">message-router</div>
+        <div class="node node-store" style="font-size:12px">userTargets (内存)</div>
+        <div style="font-size:11px;color:#5a5a6a;margin-top:4px">记录用户 openid<br>用于主动消息发送</div>
+      </div>
+      <div class="branch">
+        <div class="branch-title">SSE 事件流</div>
+        <div class="node node-store" style="font-size:12px">GET /events</div>
+        <div style="font-size:11px;color:#5a5a6a;margin-top:4px">实时推送日志到<br>Dashboard 面板</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 图例 ══ -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#1e1040;border-color:#5a3a8a"></div>
+      触发器 / 入口
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#0e1a30;border-color:#2a5a9a"></div>
+      处理 / 调度逻辑
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#1a1a0e;border-color:#7a6a20"></div>
+      条件判断
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#0e2018;border-color:#2a7a4a"></div>
+      Tool 调用 / Agent 动作
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#201018;border-color:#8a2a5a"></div>
+      消息发送（QQ API）
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#181818;border-color:#4a4a4a"></div>
+      存储层
+    </div>
+  </div>
+
+  <!-- ══ 关键说明 ══ -->
+  <div style="margin-top:40px;padding:20px 24px;border:1px solid #1e1530;border-radius:12px;background:#0c0918">
+    <div style="font-size:12px;color:#5a4a7a;letter-spacing:2px;margin-bottom:16px">── 关键设计说明 ──</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="note" style="max-width:100%">
+        <strong style="color:#c8a8f0">心跳 vs 主动消息的区别</strong><br>
+        心跳（路径A）是 LLM 自主决策，可调用 send_message tool 主动发消息；定时任务（路径C）是预定好的机械化发送。两者都是主动消息，都不带 msg_id。
+      </div>
+      <div class="note" style="max-width:100%">
+        <strong style="color:#c8a8f0">消息排队机制</strong><br>
+        用户消息到来时若 Agent 正在运行（心跳中），消息进入 messageQueue 而非丢弃，心跳结束后立即处理，保证不漏消息。
+      </div>
+      <div class="note" style="max-width:100%">
+        <strong style="color:#c8a8f0">被动回复 vs 主动消息</strong><br>
+        用户发消息后回复（路径B）携带 msg_id，属于被动回复，无需特殊权限，有效期 60 分钟。主动消息（路径A/C）不带 msg_id，每月有配额限制。
+      </div>
+      <div class="note" style="max-width:100%">
+        <strong style="color:#c8a8f0">API 域名</strong><br>
+        获取 Token：bots.qq.com<br>
+        发送消息：api.sgroup.qq.com（v2 接口）<br>
+        两个域名不能互换，之前 503 的根因。
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+config.json
+data/
+node_modules/
+dashboard/node_modules/
+dashboard/dist/
+*.log
