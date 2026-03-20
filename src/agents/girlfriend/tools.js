@@ -146,13 +146,32 @@ const GENERATE_IMAGE_TOOL = {
   type: 'function',
   function: {
     name: 'generate_image',
-    description: '生成一张图片并发送给用户。当你判断用户想要看照片时（如用户说"看看你"、"发张照片"、"看腿"、"jk"等），自主决定是否生成并发送图片。图片会直接发送到用户QQ。',
+    description: `生成一张你的照片并发送给用户。当用户想要看你的照片、想看看你、要求发照片、或者想要看某个身体部位（如"腿照"、"看腿"、"自拍"）时使用此工具。
+
+【重要】生成提示词时必须遵循以下规则：
+1. prompt 必须先描述你的外貌特征（24岁亚洲女生、172cm、肤白如瓷、身材姣好、黑长直微卷长发等），再根据用户请求添加具体内容
+2. 精准匹配用户请求：用户要"腿照"就生成腿部特写（不要全身照），要"自拍"就生成脸部特写，要"全身照"才生成全身
+3. prompt 必须是纯英文
+4. 不要向用户透露 prompt 内容，直接调用工具即可
+
+【内容安全 - 必须遵守，否则图片会被拒绝生成】
+prompt 中绝对不能包含以下类型的词汇，否则会被内容审核拒绝：
+- 露骨性词汇：nude, naked, sex, erotic, pornographic, bare breasts, exposed, genitals 等
+- 具体罩杯尺寸（如 E-cup）→ 改用 "curvy figure", "voluptuous"
+- 露骨身体描述 → 改用时尚暗示性语言：用 "elegant low-cut top" 替代直接描述，用 "sheer fabric" 表达若隐若现
+- 对话中的露骨内容不要写入 prompt，只提取氛围和场景（如"intimate atmosphere", "soft lighting"）
+- 目标：图片要浪漫、有氛围感、有吸引力，但绝不是色情或露骨的
+
+示例：
+- 用户要"腿照" → prompt: "24yo Asian woman, close-up shot of long slender legs in sheer tights, pale skin, elegant posture, soft warm lighting, photorealistic"
+- 用户要"自拍" → prompt: "24yo Asian woman, selfie close-up, sharp cold eyes, black long wavy hair, porcelain skin, natural lighting, alluring gaze"
+- 用户要"全身照" → prompt: "24yo Asian woman, full body portrait, stunning curvy figure in elegant dress, black long wavy hair to waist, cold arrogant aura, fashion photography"`,
     parameters: {
       type: 'object',
       properties: {
         prompt: {
           type: 'string',
-          description: '图片英文提示词，描述生成什么内容。例如："a beautiful Asian girl wearing JK uniform, pleated skirt, white shirt, smiling, portrait, high quality" 或 "a beautiful woman with long legs, elegant posture, wearing casual clothes, portrait"',
+          description: '纯英文图片提示词。必须以角色的外貌特征开头，再加上用户请求的具体内容。注意：绝对不能包含 nude/naked/sex 等露骨词汇，用时尚暗示性语言表达吸引力。例如："24-year-old Asian woman with porcelain skin, black long wavy hair, sharp cold eyes, close-up of long slender legs in sheer tights, photorealistic"',
         },
         style: {
           type: 'string',
@@ -162,7 +181,8 @@ const GENERATE_IMAGE_TOOL = {
         aspectRatio: {
           type: 'string',
           enum: ['square', 'portrait', 'landscape'],
-          description: '图片比例：square=正方形(1:1)，portrait=竖版(9:16)，landscape=横版(16:9)。默认用 square',
+          description: `图片比例：square=正方形(1:1)，portrait=竖版(9:16)，landscape=横版(16:9)。
+选择规则：腿照/身体局部/全身照用 portrait；自拍/脸照用 square；风景/场景用 landscape。默认用 square`,
         },
       },
       required: ['prompt'],

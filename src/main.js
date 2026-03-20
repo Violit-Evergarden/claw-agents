@@ -9,7 +9,7 @@ const sse = require('./server/sse');
 const { createServer } = require('./server/index');
 const { createGirlfriendAgent } = require('./agents/girlfriend/config');
 const { createAssistantAgent } = require('./agents/assistant/config');
-const { getImageGenerationParams } = require('./agents/girlfriend/image-trigger');
+const { generateImagePrompt, clearPromptCache } = require('./agents/girlfriend/image-trigger');
 const imageGenerator = require('./agents/girlfriend/image-generator');
 const characterStore = require('./core/character-store');
 
@@ -38,13 +38,18 @@ async function main() {
       return 'Agent loop triggered';
     }
     if (task.action === 'send_image') {
-      // 定时图片任务：直接生成图片并发送，不经过 agent loop
+      // 定时图片任务：用 LLM 智能生成提示词，然后生成图片并发送
       try {
         const params = JSON.parse(task.content || '{}');
         const charId = params.charId || task.agentId || 'violet';
-        const imageParams = getImageGenerationParams(charId, params.originalMessage || '');
 
-        console.log(`[Cron] send_image task: charId=${charId}, prompt="${imageParams.prompt.substring(0, 50)}..."`);
+        // 用 LLM 智能生成提示词（替代旧的硬编码拼接）
+        const imageParams = await generateImagePrompt(charId, params.originalMessage || '发张照片');
+
+        // ========== 打印完整 prompt 用于调试 ==========
+        console.log(`[Cron] send_image FULL PROMPT:\n"${imageParams.prompt}"`);
+        console.log(`[Cron] send_image params: style=${imageParams.style}, aspectRatio=${imageParams.aspectRatio}`);
+        // ==============================================
 
         const result = await imageGenerator.generateImage(imageParams.prompt, imageParams.style, imageParams.aspectRatio);
         const imagePath = result.localPath || result.url;
@@ -61,6 +66,39 @@ async function main() {
         return '定时图片已发送';
       } catch (err) {
         console.error(`[Cron] send_image task failed: ${err.message}`);
+
+        // 如果是内容审核拒绝，清缓存并尝试用安全模式重试一次
+        if (err.message.includes('content moderation')) {
+          console.log('[Cron] Content moderation rejected, clearing cache and retrying with safe fallback...');
+          clearPromptCache();
+          try {
+            const params = JSON.parse(task.content || '{}');
+            const charId = params.charId || task.agentId || 'violet';
+            // 强制重新生成（不走缓存）
+            const { getImageGenerationParams } = require('./agents/girlfriend/image-trigger');
+            const safeParams = getImageGenerationParams(charId, params.originalMessage || '发张照片');
+
+            console.log(`[Cron] RETRY FULL PROMPT:\n"${safeParams.prompt}"`);
+            console.log(`[Cron] RETRY params: style=${safeParams.style}, aspectRatio=${safeParams.aspectRatio}`);
+
+            const result = await imageGenerator.generateImage(safeParams.prompt, safeParams.style, safeParams.aspectRatio);
+            const imagePath = result.localPath || result.url;
+            if (imagePath) {
+              await messageRouter.sendImage(
+                task.platform || 'qq',
+                imagePath,
+                '',
+                params.userOpenid || undefined,
+                undefined,
+                task.agentId
+              );
+              return '定时图片已发送（fallback）';
+            }
+          } catch (retryErr) {
+            console.error(`[Cron] Fallback retry also failed: ${retryErr.message}`);
+          }
+        }
+
         try {
           const params = JSON.parse(task.content || '{}');
           await messageRouter.sendMessage(

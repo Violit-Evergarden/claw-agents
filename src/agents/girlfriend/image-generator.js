@@ -112,11 +112,12 @@ class GrokImageGenerator {
    */
   getStylePrompt(basePrompt, style) {
     const styleMap = {
-      realistic: `photorealistic, ${basePrompt}, high-quality photo, natural lighting, realistic details`,
-      anime: `anime style, ${basePrompt}, vibrant colors, anime art style, Japanese anime aesthetic`,
-      cartoon: `cartoon style, ${basePrompt}, colorful, cartoon illustration, fun and playful`,
-      artistic: `artistic painting, ${basePrompt}, artistic style, creative composition, painterly`,
-      photographic: `professional photography, ${basePrompt}, high-resolution, camera shot, photographic`,
+      // realistic 不再包装整个 prompt，避免冗余和重复的角色描述
+      realistic: basePrompt,
+      anime: `anime style, ${basePrompt}, vibrant colors, Japanese anime aesthetic`,
+      cartoon: `cartoon style, ${basePrompt}, colorful, fun and playful`,
+      artistic: `artistic painting, ${basePrompt}, creative composition, painterly`,
+      photographic: `professional photography, ${basePrompt}, high-resolution, camera shot`,
     };
     return styleMap[style] || basePrompt;
   }
