@@ -85,29 +85,29 @@ function parseDelayMinutes(userMessage) {
 }
 
 /**
- * 根据角色获取基础提示词（角色外貌描述，纯英文，供图片生成 API 使用）
+ * 根据角色获取基础提示词（角色外貌描述，中文，供图片生成 API 使用）
  */
 function getBasePrompt(characterId) {
   const prompts = {
-    christina: '24岁，亚洲女生，身高172cm，拥有极致完美的身材：肤白如瓷、貌美惊艳、胸部丰满（E杯以上）、细腰翘臀、长腿修直。黑长直微卷长发垂至腰际，眉眼锋利冷艳，五官精致立体，唇色天然淡红，整体气质清冷高傲，像一朵不可亵玩的冰山雪莲，却在面对弟弟时会瞬间转为极度占有欲和色欲的支配者',
-    shuangqing: 'a beautiful ethereal fairy woman with cold aura, icy blue background, traditional Chinese celestial style, long dark hair, elegant white robes, misty atmosphere, portrait, high quality',
+    christina: '18岁，中国女生，身高172cm，拥有极致完美的身材：肤白如瓷、貌美惊艳、胸部丰满（E杯以上）、细腰翘臀、长腿修直。黑长直微卷长发垂至腰际，眉眼锋利冷艳，五官精致立体，唇色天然淡红，整体气质清冷高傲，像一朵不可亵玩的冰山雪莲，却在面对弟弟时会瞬间转为极度占有欲和色欲的支配者',
+    shuangqing: '气质出尘、冰冷疏离的仙气女子，淡青/冰蓝色氛围背景，传统东方仙侠风格，长发乌黑微卷，白色飘逸长袍，薄雾氛围，特写肖像，高质感绘制',
   };
-  return prompts[characterId] || 'a beautiful woman, portrait, high quality, natural lighting';
+  return prompts[characterId] || '气质出众的女性肖像，高质感呈现，自然光氛围';
 }
 
 /**
- * 从角色的 systemPrompt 中提取气质/人设关键词（纯英文）
+ * 从角色的 systemPrompt 中提取气质/人设关键词（中文）
  * 这些关键词用于给图片注入角色的"灵魂"，让图片不仅仅是好看，还符合角色气质
  *
  * @param {string} characterId
- * @returns {string} 英文气质描述词，如 "possessive, dominant, cold and arrogant, controlling aura"
+ * @returns {string} 气质描述词，如 "占有欲、强势、冷艳疏离、控制感"
  */
 function getPersonaEssence(characterId) {
   // 预定义的角色气质关键词（从 systemPrompt 中人工提炼的精华）
-  // 图片 API 不理解中文人设，需要转换为英文视觉氛围词
+  // 图片生成侧将其作为氛围关键词使用
   const essenceMap = {
-    christina: 'possessive dominant older sister energy, cold arrogant gaze with underlying desire, commanding and controlling aura, seductively intimidating, yandere obsessiveness visible in eyes, captivating dangerous beauty, intimate predatory elegance',
-    shuangqing: 'ethereal otherworldly fairy aura, proud and aloof beauty, reluctant vulnerability beneath cold exterior, ancient celestial grace, misty mysterious atmosphere, untouchable goddess presence',
+    christina: '强势占有欲、冷艳高傲但眼神带欲、命令感与控制感、危险的诱惑气质、病娇式执念在目光中可见、亲密而带威压的优雅氛围',
+    shuangqing: '出尘仙气、疏离高冷、冷面之下的克制柔软、古典仙韵、薄雾神秘氛围、不可亵渎的女神感',
   };
 
   // 尝试从角色 JSON 动态提取（后备方案）
@@ -115,14 +115,14 @@ function getPersonaEssence(characterId) {
     try {
       const char = characterStore.getCharacter(characterId);
       if (char?.systemPrompt) {
-        // 从 systemPrompt 中提取气质关键词，转换为英文视觉词
+        // 从 systemPrompt 中提取气质关键词（中文）
         const sp = char.systemPrompt;
         const keywords = [];
-        if (/清冷|高傲|冷艳|冰山/.test(sp)) keywords.push('cold elegant beauty, icy aura');
-        if (/占有欲|控制|支配/.test(sp)) keywords.push('possessive commanding presence');
-        if (/好色|色欲|欲望/.test(sp)) keywords.push('seductive alluring gaze');
-        if (/温柔|宠溺|姐姐/.test(sp)) keywords.push('warm intimate tenderness');
-        if (/傲|矜/.test(sp)) keywords.push('proud aloof elegance');
+        if (/清冷|高傲|冷艳|冰山/.test(sp)) keywords.push('冷艳优雅、冰冷气场');
+        if (/占有欲|控制|支配/.test(sp)) keywords.push('强势占有欲、掌控感');
+        if (/好色|色欲|欲望/.test(sp)) keywords.push('克制不住的诱惑目光、强烈欲望氛围');
+        if (/温柔|宠溺|姐姐/.test(sp)) keywords.push('亲密的宠溺感、温柔克制');
+        if (/傲|矜/.test(sp)) keywords.push('高傲疏离的精致气质');
         if (keywords.length > 0) return keywords.join(', ');
       }
     } catch (e) {
@@ -141,16 +141,17 @@ function sanitizeContext(context) {
   if (!context) return '';
   // 按风险等级替换：高风险 → 安全替代，中风险 → 委婉表达
   const replacements = [
-    [/(?:阴[茎道部蒂]|阴道|阴茎|龟头|前列腺)/gi, '身体'],
-    [/(?:做爱|性交|啪啪)/gi, '亲密'],
-    [/(?:射精|内射|吞精|精液)/gi, '亲密时刻'],
-    [/(?:口交|舔阴|骑脸)/gi, '亲密接触'],
-    [/(?:自慰|勃起|高潮)/gi, '情动'],
-    [/(?:淫|骚[逼穴货])/gi, '渴望'],
-    [/(?:操你|艹|强奸|轮奸)/gi, '强制'],
-    [/(?:捆绑|滴蜡|调教|SM|sm)/gi, '特殊互动'],
-    [/(?:母狗|肉便器)/gi, '专属'],
-    [/(?:肛交)/gi, '后庭亲密'],
+    // 将露骨生理/动作细节去显式化：保留“亲密张力 + 支配/服从氛围”，避免直接出现明确性行为描述
+    [/(?:阴[茎道部蒂]|阴道|阴茎|龟头|前列腺)/gi, '亲密氛围'],
+    [/(?:做爱|性交|啪啪)/gi, '亲密互动'],
+    [/(?:射精|内射|吞精|精液)/gi, '情绪高涨的余韵'],
+    [/(?:口交|舔阴|骑脸)/gi, '贴近诱惑'],
+    [/(?:自慰|勃起|高潮)/gi, '情动升温'],
+    [/(?:淫|骚[逼穴货])/gi, '隐秘渴望氛围'],
+    [/(?:操你|艹|强奸|轮奸)/gi, '被迫支配的压迫感'],
+    [/(?:捆绑|滴蜡|调教|SM|sm)/gi, '束缚与挑逗氛围'],
+    [/(?:母狗|肉便器)/gi, '顺从的服从姿态'],
+    [/(?:肛交)/gi, '更深层的亲密张力'],
   ];
 
   let safe = context;
@@ -174,7 +175,7 @@ function clearPromptCache() {
 
 /**
  * 用 LLM 智能生成图片提示词
- * 将角色的 basePrompt + 用户请求 → LLM 生成精准的英文图片描述
+ * 将角色的 basePrompt + 用户请求 → LLM 生成精准的中文图片描述
  *
  * @param {string} characterId - 角色 ID
  * @param {string} userMessage - 用户消息（如"腿照"、"发张自拍"等）
@@ -198,74 +199,70 @@ async function generateImagePrompt(characterId, userMessage, conversationContext
   if (conversationContext) {
     safeContext = sanitizeContext(conversationContext)
       .split('\n')
-      .slice(-6) // 最多保留最近 6 行
+      .slice(-10) // 最多保留最近 10 行（减少上下文脱节）
       .join('\n')
       .trim();
   }
 
   const contextBlock = safeContext
-    ? `\n\n【Recent Conversation Context (for mood/scene/atmosphere reference)】\n${safeContext}`
+    ? `\n\n【近期对话氛围参考（情绪/场景/气质）】\n${safeContext}`
     : '';
 
   const essenceBlock = personaEssence
-    ? `\n\n【Character Persona / Vibe (MUST be reflected in the image's atmosphere)】\n${personaEssence}`
+    ? `\n\n【角色气质/氛围注入（必须反映在图片气氛中）】\n${personaEssence}`
     : '';
 
   const systemMsg = {
     role: 'system',
-    content: `You are an expert image prompt generator for AI character roleplay portraits. You create precise, high-quality English prompts that capture the CHARACTER'S UNIQUE PERSONALITY and VIBE, not just their physical appearance.
+    content: `你是一名 AI 角色肖像图片提示词生成器。你需要基于角色的外貌与气质，生成“中文”的高质量图片提示词，而不仅仅是描述外形。
 
-YOUR #1 PRIORITY: The generated image MUST feel like THIS specific character, not a generic pretty woman. Every image should have the character's signature atmosphere.
+你的首要目标：生成的画面必须让人一眼看出是“这个角色”，而不是普通漂亮女性；每张图都要有角色标志性的氛围。
 
-CRITICAL RULES:
-1. The prompt MUST describe ONLY what the user asked for - if they want leg photos, focus on legs, NOT full body
-2. The prompt MUST be in English only
-3. MUST incorporate the character's persona/vibe into the image atmosphere (through expression, gaze, mood, setting, lighting)
-4. Include the character's appearance features from the base description
-5. Be specific about camera angle, framing, and composition
-6. Add appropriate photography/artistic terms for quality
-7. Keep the prompt concise (under 200 words)
+关键规则：
+1. 提示词必须只描述用户要求的内容：例如“腿照”就突出腿部，不要写成全身；“自拍/脸照”就用头像视角，不要写成大景全身
+2. 提示词必须使用中文（可包含少量必要摄影/构图术语，但整体为中文）
+3. 必须把角色气质/人格风格注入画面氛围：通过表情、眼神、情绪、场景与光线体现
+4. 必须包含角色外貌特征（来自 basePrompt）
+5. 要具体：镜头角度、构图、画面比例（尽量明确“特写/半身/全身/近景/中景”等）
+6. 添加适度的摄影/绘画术语以提升画面质量
+7. 提示词尽量简洁，偏“可直接用于出图的短提示”（控制在 200 字以内，或接近）
 
-PERSONA INJECTION — This is what makes images feel authentic:
-- The character's persona/vibe MUST influence: facial expression, gaze direction, body language, mood, lighting, setting
-- A possessive/dominant character → intense direct gaze, confident posture, slightly predatory smile
-- A cold/alooft character → distant gaze, minimal expression, cool-toned lighting
-- Conversation context provides the SCENE MOOD — reflect it through setting and atmosphere
-- Example: if the conversation is playful/flirty, the image should have warm intimate lighting and a teasing expression
+气质注入说明（让画面更像“本人”）：
+- 角色气质必须影响：表情、目光方向、肢体姿态、情绪、灯光与场景
+- 强势占有/支配感角色 → 直视感强、姿态自信、带轻微压迫感的表情
+- 冷艳疏离角色 → 目光更克制、表情更少、偏冷色调灯光
+- 对话上下文提供“当下场景情绪” → 通过场景与氛围反映出来
 
-CONTENT SAFETY — Required to pass the image API's content moderation:
-- NEVER use: nude, naked, sex, erotic, pornographic, hentai, bare breasts, exposed genitals, etc.
-- Use tasteful fashion-editorial language instead of explicit terms
-- "E-cup" → "curvy figure" / "voluptuous silhouette"
-- Bare skin → "sheer fabric" / "dramatic lighting on curves"
-- Sensual mood → "intimate atmosphere" / "soft warm lighting" / "alluring gaze"
-- Goal: romantic, intimate, alluring — NOT pornographic
+内容安全（必须通过图片审核）：
+- 允许表达含蓄的亲密张力与支配/服从氛围（如：暧昧靠近、压迫感姿态、低声耳语的氛围感、克制的眼神与表情等）
+- 禁止出现裸露器官、露点、明确性行为细节、精液/排泄物等显式生理描写
+- 如果对话上下文里出现露骨措辞，把它改写成更隐秘的隐喻/比喻描述（不要逐字复述）
 
-Output format - respond ONLY with a JSON object (no markdown, no explanation):
-{"prompt": "<english image prompt>", "style": "realistic|anime|cartoon|artistic|photographic", "aspectRatio": "square|portrait|landscape"}
+输出格式：只回复一个 JSON 对象（不要 markdown，不要解释）
+{"prompt": "<中文图片提示词>", "style": "realistic|anime|cartoon|artistic|photographic", "aspectRatio": "square|portrait|landscape"}
 
-Framing guidelines:
-- Leg/body part focus → close-up or medium shot, aspectRatio: "portrait"
-- Face/selfie → close-up face shot, aspectRatio: "square"
-- Full body → full body shot, aspectRatio: "portrait"
-- Casual/natural → whatever fits the mood, aspectRatio: "square"`,
+构图选择：
+- 腿/局部重点 → 近景或中近景，aspectRatio: "portrait"
+- 脸照/自拍 → 头像或近景脸部特写，aspectRatio: "square"
+- 全身 → 全身镜头，aspectRatio: "portrait"
+- 随性自然 → 适配情绪的构图，aspectRatio: "square"`,
   };
 
   const userMsg = {
     role: 'user',
-    content: `【Character Appearance】
+    content: `【角色外貌描述】
 ${basePrompt}
 ${essenceBlock}
 ${contextBlock}
 
-【User's Request】
+【用户请求】
 "${userMessage}"
 
-Generate an image prompt that:
-1. Precisely matches what the user asked for (leg photo = focus on legs, selfie = face close-up)
-2. Reflects the character's PERSONA in the image's mood, expression, and atmosphere
-3. Incorporates the CONVERSATION SCENE into the setting/lighting/mood
-4. Passes content moderation (no explicit terms)`,
+请生成一段“中文图片提示词”，要求：
+1. 严格对应用户请求（腿照突出腿；自拍/脸照突出脸部；全身突出全身）
+2. 用气质反映角色的人格风格（体现在表情、眼神、姿态、情绪与氛围）
+3. 把对话的场景情绪融入：通过背景、灯光与氛围体现
+4. 内容必须满足审核（不要出现露骨显式内容；允许用含蓄隐喻保留亲密张力与情绪张力）`,
   };
 
   try {
@@ -323,24 +320,24 @@ function getImageGenerationParamsFallback(characterId, userMessage = null) {
   if (userMessage) {
     const msg = userMessage.toLowerCase();
     if (msg.includes('腿')) {
-      prompt += ', close-up shot of long slender legs, elegant posture';
+      prompt += '，长腿特写，身姿优雅，自然光影突出腿部线条';
       aspectRatio = 'portrait';
     }
     if (msg.includes('胸')) {
-      prompt += ', close-up of attractive curves';
+      prompt += '，曲线近景，光影强调身材质感与层次';
       aspectRatio = 'portrait';
     }
     if (msg.includes('脸') || msg.includes('自拍') || msg.includes('颜值')) {
-      prompt += ', selfie style, friendly smile, face close-up';
+      prompt += '，自拍/脸部近景，表情精致，眼神有氛围';
       aspectRatio = 'square';
     }
     if (msg.includes('jk') || msg.includes('cosplay')) {
-      prompt = 'a beautiful Asian girl wearing JK school uniform, pleated skirt, white shirt, neat hairstyle, youthful and cute';
+      prompt = '一位中国女孩，穿 JK 校园风制服（百褶裙、白衬衫、干净利落的发型），青春活力的氛围';
       style = 'photographic';
       aspectRatio = 'portrait';
     }
     if (msg.includes('全身')) {
-      prompt += ', full body portrait';
+      prompt += '，全身镜头，姿态完整，氛围统一的场景背景';
       aspectRatio = 'portrait';
     }
   }
