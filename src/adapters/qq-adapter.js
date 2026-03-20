@@ -66,21 +66,50 @@ function createQQAdapter(appId, appSecret) {
   /**
    * 上传图片到 QQ 好友（单聊）
    * @param {string} openid - 用户 openid
-   * @param {string} imageUrl - 图片 URL
+   * @param {string} imagePath - 图片 URL 或本地文件路径
    * @returns {Promise<string>} file_info
    */
-  async function uploadFriendImage(openid, imageUrl) {
+  async function uploadFriendImage(openid, imagePath) {
     const token = await getAccessToken();
-    const body = {
-      file_type: 1, // 1=图片
-      url: imageUrl,
-      srv_send_msg: false, // 先上传，不直接发送
-    };
+    const fs = require('fs');
+    
+    let body;
     const headers = {
       Authorization: `QQBot ${token}`,
       'X-Union-Appid': appId,
       'Content-Type': 'application/json',
     };
+
+    // 判断是本地文件还是 URL
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      // URL 方式
+      body = {
+        file_type: 1, // 1=图片
+        url: imagePath,
+        srv_send_msg: false,
+      };
+    } else {
+      // 本地文件：读取并转 base64
+      try {
+        const imageBuffer = fs.readFileSync(imagePath);
+        const base64Data = imageBuffer.toString('base64');
+        body = {
+          file_type: 1,
+          file_data: base64Data,
+          srv_send_msg: false,
+        };
+        console.log(`[QQ:${appId}] Using base64 upload for local file: ${imagePath}`);
+      } catch (readErr) {
+        console.error(`[QQ:${appId}] Failed to read local image file: ${readErr.message}`);
+        // 文件读取失败，回退到 URL 方式（虽然可能会失败）
+        body = {
+          file_type: 1,
+          url: imagePath,
+          srv_send_msg: false,
+        };
+      }
+    }
+
     const res = await postWithRetry(
       `https://api.sgroup.qq.com/v2/users/${openid}/files`,
       body,
@@ -165,18 +194,44 @@ function createQQAdapter(appId, appSecret) {
   /**
    * 上传图片到 QQ 群
    */
-  async function uploadGroupImage(groupId, imageUrl) {
+  async function uploadGroupImage(groupId, imagePath) {
     const token = await getAccessToken();
-    const body = {
-      file_type: 1,
-      url: imageUrl,
-      srv_send_msg: false,
-    };
+    const fs = require('fs');
+    
+    let body;
     const headers = {
       Authorization: `QQBot ${token}`,
       'X-Union-Appid': appId,
       'Content-Type': 'application/json',
     };
+
+    // 判断是本地文件还是 URL
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      body = {
+        file_type: 1,
+        url: imagePath,
+        srv_send_msg: false,
+      };
+    } else {
+      try {
+        const imageBuffer = fs.readFileSync(imagePath);
+        const base64Data = imageBuffer.toString('base64');
+        body = {
+          file_type: 1,
+          file_data: base64Data,
+          srv_send_msg: false,
+        };
+        console.log(`[QQ:${appId}] Using base64 upload for local file: ${imagePath}`);
+      } catch (readErr) {
+        console.error(`[QQ:${appId}] Failed to read local image file: ${readErr.message}`);
+        body = {
+          file_type: 1,
+          url: imagePath,
+          srv_send_msg: false,
+        };
+      }
+    }
+
     const res = await postWithRetry(
       `https://api.sgroup.qq.com/v2/groups/${groupId}/files`,
       body,

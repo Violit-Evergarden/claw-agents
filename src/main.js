@@ -9,6 +9,9 @@ const sse = require('./server/sse');
 const { createServer } = require('./server/index');
 const { createGirlfriendAgent } = require('./agents/girlfriend/config');
 const { createAssistantAgent } = require('./agents/assistant/config');
+const { getImageGenerationParams } = require('./agents/girlfriend/image-trigger');
+const imageGenerator = require('./agents/girlfriend/image-generator');
+const characterStore = require('./core/character-store');
 
 // ── 启动横幅 ──
 console.log(`
@@ -33,6 +36,43 @@ async function main() {
     if (task.action === 'run_loop') {
       await agentManager.triggerManually(task.agentId || 'violet');
       return 'Agent loop triggered';
+    }
+    if (task.action === 'send_image') {
+      // 定时图片任务：直接生成图片并发送，不经过 agent loop
+      try {
+        const params = JSON.parse(task.content || '{}');
+        const charId = params.charId || task.agentId || 'violet';
+        const imageParams = getImageGenerationParams(charId, params.originalMessage || '');
+
+        console.log(`[Cron] send_image task: charId=${charId}, prompt="${imageParams.prompt.substring(0, 50)}..."`);
+
+        const result = await imageGenerator.generateImage(imageParams.prompt, imageParams.style, imageParams.aspectRatio);
+        const imagePath = result.localPath || result.url;
+        if (!imagePath) throw new Error('图片路径为空');
+
+        await messageRouter.sendImage(
+          task.platform || 'qq',
+          imagePath,
+          '',  // caption 为空，保持自然
+          params.userOpenid || undefined,
+          undefined,
+          task.agentId
+        );
+        return '定时图片已发送';
+      } catch (err) {
+        console.error(`[Cron] send_image task failed: ${err.message}`);
+        try {
+          const params = JSON.parse(task.content || '{}');
+          await messageRouter.sendMessage(
+            task.platform || 'qq',
+            '抱歉，图片生成失败了…',
+            params.userOpenid || undefined,
+            undefined,
+            task.agentId
+          );
+        } catch (_) {}
+        return `Error: ${err.message}`;
+      }
     }
     return 'unknown action';
   });

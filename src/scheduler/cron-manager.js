@@ -149,6 +149,10 @@ class CronManager extends EventEmitter {
     }
     taskStore.appendHistory(task.id, result);
     this.emit('task:executed', { task, result });
+
+    // 执行完毕后自动删除任务（所有定时任务默认一次性执行，不重复）
+    this.removeTask(task.id);
+    console.log(`[CronManager] Task auto-removed after execution: ${task.id}`);
   }
 }
 

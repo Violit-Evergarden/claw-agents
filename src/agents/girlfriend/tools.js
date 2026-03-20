@@ -146,23 +146,23 @@ const GENERATE_IMAGE_TOOL = {
   type: 'function',
   function: {
     name: 'generate_image',
-    description: '生成一张图片（如照片、插图等）并发送给用户。当你觉得用户想要看到一张图片，或者在对话中提到"照片"、"图片"、"看看你"等关键词时使用。',
+    description: '生成一张图片并发送给用户。当你判断用户想要看照片时（如用户说"看看你"、"发张照片"、"看腿"、"jk"等），自主决定是否生成并发送图片。图片会直接发送到用户QQ。',
     parameters: {
       type: 'object',
       properties: {
         prompt: {
           type: 'string',
-          description: '图片生成描述，用英文描述需要的图片内容，如"a cute asian girl smiling at camera, wearing casual clothes, sunny day, natural lighting, portrait"',
+          description: '图片英文提示词，描述生成什么内容。例如："a beautiful Asian girl wearing JK uniform, pleated skirt, white shirt, smiling, portrait, high quality" 或 "a beautiful woman with long legs, elegant posture, wearing casual clothes, portrait"',
         },
         style: {
           type: 'string',
           enum: ['realistic', 'anime', 'cartoon', 'artistic', 'photographic'],
-          description: '图片风格：realistic=写实，anime=动漫，cartoon=卡通，artistic=艺术，photographic=摄影',
+          description: '图片风格：realistic=写实，anime=动漫，cartoon=卡通，artistic=艺术，photographic=摄影。默认用 realistic',
         },
         aspectRatio: {
           type: 'string',
           enum: ['square', 'portrait', 'landscape'],
-          description: '图片比例：square=正方形(1:1)，portrait=竖版(9:16)，landscape=横版(16:9)',
+          description: '图片比例：square=正方形(1:1)，portrait=竖版(9:16)，landscape=横版(16:9)。默认用 square',
         },
       },
       required: ['prompt'],
