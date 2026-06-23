@@ -89,7 +89,7 @@ class AgentManager extends EventEmitter {
    */
   async _scheduleNextHeartbeat(agentId) {
     const inst = this.agents.get(agentId);
-    if (!inst || !inst.timer === undefined) return; // 已被 stop()
+    if (!inst || inst.timer == null) return; // 已被 stop()
 
     if (inst.status !== 'running') {
       await this._runAgentHeartbeat(agentId);
@@ -200,7 +200,6 @@ class AgentManager extends EventEmitter {
   async _runAgentTurn(inst, userMessage, platform, meta = {}) {
     if (inst.status === 'running') {
       if (userMessage) {
-        // 用户消息不丢弃，等当前 turn 结束后立即处理
         this._log(inst, `Already running, queuing message: ${userMessage}`);
         inst.messageQueue.push({ message: userMessage, platform, meta });
       } else {
@@ -208,6 +207,7 @@ class AgentManager extends EventEmitter {
       }
       return;
     }
+
     inst.status = 'running';
     inst.lastActive = new Date().toISOString();
     this.emit('agent:status', { id: inst.id, status: 'running' });
@@ -216,31 +216,27 @@ class AgentManager extends EventEmitter {
       this._log(inst, msg, level);
     };
 
-    inst.runTurn(userMessage, onLog, platform, meta)
-      .then(() => {
+    try {
+      await inst.runTurn(userMessage, onLog, platform, meta);
+      inst.status = 'idle';
+      this.emit('agent:status', { id: inst.id, status: 'idle' });
+      this.emit('agent:turn:complete', { id: inst.id, success: true });
+    } catch (err) {
+      inst.status = 'error';
+      this._log(inst, `Error: ${err.message}`, 'error');
+      this.emit('agent:status', { id: inst.id, status: 'error' });
+      this.emit('agent:turn:complete', { id: inst.id, success: false, error: err.message });
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      if (inst.status === 'error') {
         inst.status = 'idle';
         this.emit('agent:status', { id: inst.id, status: 'idle' });
-        // 处理排队的消息
-        if (inst.messageQueue.length > 0) {
-          const next = inst.messageQueue.shift();
-          this._runAgentTurn(inst, next.message, next.platform, next.meta);
-        }
-      })
-      .catch(err => {
-        inst.status = 'error';
-        this._log(inst, `Error: ${err.message}`, 'error');
-        this.emit('agent:status', { id: inst.id, status: 'error' });
-        // 5秒后恢复 idle，并处理排队消息
-        setTimeout(() => {
-          if (inst.status === 'error') {
-            inst.status = 'idle';
-            if (inst.messageQueue.length > 0) {
-              const next = inst.messageQueue.shift();
-              this._runAgentTurn(inst, next.message, next.platform, next.meta);
-            }
-          }
-        }, 5000);
-      });
+      }
+    }
+
+    if (inst.messageQueue.length > 0) {
+      const next = inst.messageQueue.shift();
+      await this._runAgentTurn(inst, next.message, next.platform, next.meta);
+    }
   }
 
   _log(inst, message, level = 'info') {

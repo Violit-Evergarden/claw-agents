@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const { v4: uuidv4 } = require('uuid');
 const EventEmitter = require('events');
 const taskStore = require('./task-store');
+const { isSchedulerEnabled } = require('../core/config-loader');
 
 /**
  * CronManager: 管理所有定时任务
@@ -28,6 +29,10 @@ class CronManager extends EventEmitter {
    * 从持久化存储恢复所有 active 任务
    */
   restoreFromStore() {
+    if (!isSchedulerEnabled()) {
+      console.log('[CronManager] Scheduler disabled — skipped restoring tasks (saving tokens)');
+      return;
+    }
     const tasks = taskStore.getAll();
     let restored = 0;
     for (const task of tasks) {
@@ -45,6 +50,9 @@ class CronManager extends EventEmitter {
    * @returns {string} taskId
    */
   addTask(opts) {
+    if (!isSchedulerEnabled()) {
+      throw new Error('定时任务功能已暂时禁用');
+    }
     const { cronExpr, action, description, content, platform, agentId } = opts;
 
     if (!cron.validate(cronExpr)) {
@@ -91,6 +99,9 @@ class CronManager extends EventEmitter {
    * 恢复任务
    */
   resumeTask(taskId) {
+    if (!isSchedulerEnabled()) {
+      throw new Error('定时任务功能已暂时禁用');
+    }
     const task = taskStore.getById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
     if (this.jobs.has(taskId)) {
@@ -121,6 +132,9 @@ class CronManager extends EventEmitter {
    * 立即触发任务（手动）
    */
   async triggerNow(taskId) {
+    if (!isSchedulerEnabled()) {
+      throw new Error('定时任务功能已暂时禁用');
+    }
     const task = taskStore.getById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
     await this._executeTask(task);
@@ -133,6 +147,7 @@ class CronManager extends EventEmitter {
   // ── 内部方法 ──
 
   _scheduleJob(task) {
+    if (!isSchedulerEnabled()) return;
     if (this.jobs.has(task.id)) return;
     const job = cron.schedule(task.cronExpr, async () => {
       await this._executeTask(task);

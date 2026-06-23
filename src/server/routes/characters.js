@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const characterStore = require('../../core/character-store');
+const storyStateStore = require('../../core/story-state-store');
 const agentManager = require('../../core/agent-manager');
 
 /**
@@ -31,7 +32,7 @@ router.get('/active', (req, res) => {
  * Body: { name, systemPrompt, description?, avatarColor? }
  */
 router.post('/', (req, res) => {
-  const { name, systemPrompt, description, avatarColor } = req.body;
+  const { name, systemPrompt, description, avatarColor, imageBasePrompt, personaEssence, appearanceKeywords } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ success: false, error: '角色名称不能为空' });
   }
@@ -40,6 +41,9 @@ router.post('/', (req, res) => {
     systemPrompt: systemPrompt || '',
     description: description || '',
     avatarColor,
+    imageBasePrompt,
+    personaEssence,
+    appearanceKeywords,
   });
   res.json({ success: true, data: character });
 });
@@ -61,26 +65,25 @@ router.get('/:id', (req, res) => {
  */
 router.put('/:id', (req, res) => {
   const { id } = req.params;
-  const { name, description, systemPrompt, avatarColor } = req.body;
+  const { name, description, systemPrompt, avatarColor, imageBasePrompt, personaEssence, appearanceKeywords } = req.body;
 
   const updated = characterStore.updateCharacter(id, {
     ...(name !== undefined && { name: name.trim() }),
     ...(description !== undefined && { description }),
     ...(systemPrompt !== undefined && { systemPrompt }),
     ...(avatarColor !== undefined && { avatarColor }),
+    ...(imageBasePrompt !== undefined && { imageBasePrompt }),
+    ...(personaEssence !== undefined && { personaEssence }),
+    ...(appearanceKeywords !== undefined && { appearanceKeywords }),
   });
 
   if (!updated) return res.status(404).json({ success: false, error: '角色不存在' });
 
-  // 如果更新的是当前激活角色的 systemPrompt，热更新 agentManager
-  const activeId = characterStore.getActiveCharacterId();
-  if (activeId === id && systemPrompt !== undefined) {
+  agentManager.getAll().forEach(agent => {
     try {
-      agentManager.updateSystemPrompt('violet', systemPrompt);
-    } catch (e) {
-      // agent 可能未注册，忽略
-    }
-  }
+      agentManager.updateSystemPrompt(agent.id, updated.systemPrompt || '');
+    } catch (_) { /* ignore */ }
+  });
 
   res.json({ success: true, data: updated });
 });
@@ -106,9 +109,11 @@ router.delete('/:id', (req, res) => {
   const newActive = remaining[0];
   if (newActive) {
     characterStore.switchCharacter(newActive.id);
-    try {
-      agentManager.updateSystemPrompt('violet', newActive.systemPrompt || '');
-    } catch (e) { /* ignore */ }
+    agentManager.getAll().forEach(agent => {
+      try {
+        agentManager.updateSystemPrompt(agent.id, newActive.systemPrompt || '');
+      } catch (_) { /* ignore */ }
+    });
   }
 
   res.json({ success: true, deletedId: id, newActiveCharacterId: newActive?.id || null });
@@ -125,12 +130,21 @@ router.post('/:id/activate', (req, res) => {
 
   // 热更新 agentManager 中的 systemPrompt
   try {
-    agentManager.updateSystemPrompt('violet', character.systemPrompt || '');
-  } catch (e) {
-    // agent 可能未注册
-  }
+    agentManager.getAll().forEach(agent => {
+      agentManager.updateSystemPrompt(agent.id, character.systemPrompt || '');
+    });
+  } catch (_) { /* ignore */ }
 
   res.json({ success: true, data: character });
+});
+
+/**
+ * GET /api/characters/:id/story
+ * 获取角色剧情状态
+ */
+router.get('/:id/story', (req, res) => {
+  const state = storyStateStore.getState(req.params.id);
+  res.json({ success: true, data: state });
 });
 
 module.exports = router;

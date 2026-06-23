@@ -3,15 +3,21 @@
 const express = require('express');
 const router = express.Router();
 const cronManager = require('../../scheduler/cron-manager');
+const { isSchedulerEnabled } = require('../../core/config-loader');
+
+function schedulerDisabled(res) {
+  return res.status(503).json({ success: false, error: '定时任务功能已暂时禁用' });
+}
 
 // GET /api/tasks - 获取所有任务
 router.get('/', (req, res) => {
   const tasks = cronManager.getAllTasks();
-  res.json({ success: true, data: tasks });
+  res.json({ success: true, data: tasks, schedulerEnabled: isSchedulerEnabled() });
 });
 
 // POST /api/tasks - 手动新增任务
 router.post('/', (req, res) => {
+  if (!isSchedulerEnabled()) return schedulerDisabled(res);
   const { cronExpr, action, description, content, platform, agentId } = req.body;
   if (!cronExpr || !action || !description) {
     return res.status(400).json({ success: false, error: 'cronExpr, action, description required' });
@@ -34,16 +40,24 @@ router.post('/:id/pause', (req, res) => {
 
 // POST /api/tasks/:id/resume - 恢复任务
 router.post('/:id/resume', (req, res) => {
-  cronManager.resumeTask(req.params.id);
-  res.json({ success: true });
+  if (!isSchedulerEnabled()) return schedulerDisabled(res);
+  try {
+    cronManager.resumeTask(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(503).json({ success: false, error: err.message });
+  }
 });
 
 // POST /api/tasks/:id/trigger - 立即触发任务
 router.post('/:id/trigger', async (req, res) => {
-  cronManager.triggerNow(req.params.id)
-    .then(() => {})
-    .catch(err => console.error(`[API] Task trigger error: ${err.message}`));
-  res.json({ success: true });
+  if (!isSchedulerEnabled()) return schedulerDisabled(res);
+  try {
+    await cronManager.triggerNow(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(503).json({ success: false, error: err.message });
+  }
 });
 
 module.exports = router;

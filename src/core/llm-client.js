@@ -158,21 +158,50 @@ function updateProviderApiKey(providerId, apiKey) {
 }
 
 /**
- * 发起 LLM 调用，支持工具调用
- * @param {Array} messages - 对话历史
- * @param {Array} tools - 可用工具列表（OpenAI function calling 格式）
- * @param {string} agentId - 用于日志标识
- * @param {Object} [opts] - 可选配置，如 { model: 'gpt-4o-mini', maxTokens: 512 }
- * @returns {Promise<Object>} - OpenAI response message
+ * LLM 错误类型
+ */
+class LLMError extends Error {
+  constructor(message, { code, status, retryable = false } = {}) {
+    super(message);
+    this.name = 'LLMError';
+    this.code = code;
+    this.status = status;
+    this.retryable = retryable;
+  }
+}
+
+function classifyError(err) {
+  const status = err.status || err.response?.status;
+  if (status === 401 || status === 403) {
+    return new LLMError(err.message, { code: 'AUTH_ERROR', status, retryable: false });
+  }
+  if (status === 429) {
+    return new LLMError(err.message, { code: 'RATE_LIMIT', status, retryable: true });
+  }
+  if (status >= 500) {
+    return new LLMError(err.message, { code: 'SERVER_ERROR', status, retryable: true });
+  }
+  if (err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
+    return new LLMError(err.message, { code: 'TIMEOUT', retryable: true });
+  }
+  return new LLMError(err.message, { code: 'UNKNOWN', retryable: false });
+}
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 发起 LLM 调用，支持工具调用与重试
  */
 async function chat(messages, tools = [], agentId = 'unknown', opts = {}) {
   const providerCfg = getActiveProviderConfig();
-
   const apiKey = providerCfg.apiKey;
   const baseURL = providerCfg.baseURL;
   const model = opts.model || providerCfg.model;
   const maxTokens = opts.maxTokens || providerCfg.maxTokens;
   const proxy = providerCfg.proxy || null;
+  const maxRetries = opts.maxRetries ?? 2;
 
   const openai = getClient(apiKey, baseURL, proxy);
 
@@ -187,13 +216,25 @@ async function chat(messages, tools = [], agentId = 'unknown', opts = {}) {
     params.tool_choice = 'auto';
   }
 
-  console.log(`[LLM][${agentId}] provider=${providerCfg.provider} model=${model} messages=${messages.length} tools=${tools.length}`);
-
-  const response = await openai.chat.completions.create(params);
-  const message = response.choices[0].message;
-
-  console.log(`[LLM][${agentId}] Response: finish_reason=${response.choices[0].finish_reason}`);
-  return message;
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[LLM][${agentId}] provider=${providerCfg.provider} model=${model} messages=${messages.length} tools=${tools.length}${attempt > 0 ? ` retry=${attempt}` : ''}`);
+      const response = await openai.chat.completions.create(params);
+      const message = response.choices[0].message;
+      console.log(`[LLM][${agentId}] Response: finish_reason=${response.choices[0].finish_reason}`);
+      return message;
+    } catch (err) {
+      lastError = classifyError(err);
+      if (!lastError.retryable || attempt >= maxRetries) {
+        throw lastError;
+      }
+      const delay = Math.pow(2, attempt) * 1000;
+      console.warn(`[LLM][${agentId}] Retryable error (${lastError.code}), waiting ${delay}ms...`);
+      await sleep(delay);
+    }
+  }
+  throw lastError;
 }
 
 module.exports = {
@@ -202,4 +243,5 @@ module.exports = {
   switchProvider,
   updateProviderApiKey,
   getActiveProviderConfig,
+  LLMError,
 };

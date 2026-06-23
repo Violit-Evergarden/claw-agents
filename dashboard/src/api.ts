@@ -24,25 +24,6 @@ export async function sendAgentMessage(id: string, message: string) {
   });
 }
 
-// ── Persona API ──
-
-export async function fetchPersona(agentId: string): Promise<{ systemPrompt: string; updatedAt: string }> {
-  const res = await fetch(`${BASE}/agents/${agentId}/persona`);
-  const json = await res.json();
-  return json.data;
-}
-
-export async function savePersona(agentId: string, systemPrompt: string): Promise<{ systemPrompt: string; updatedAt: string }> {
-  const res = await fetch(`${BASE}/agents/${agentId}/persona`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ systemPrompt }),
-  });
-  const json = await res.json();
-  if (!json.success) throw new Error(json.error || 'Save failed');
-  return json.data;
-}
-
 export async function fetchTasks() {
   const res = await fetch(`${BASE}/tasks`);
   const json = await res.json();
@@ -142,6 +123,9 @@ export async function updateCharacter(id: string, patch: {
   description?: string;
   systemPrompt?: string;
   avatarColor?: string;
+  imageBasePrompt?: string;
+  personaEssence?: string;
+  appearanceKeywords?: string[];
 }) {
   const res = await fetch(`${BASE}/characters/${id}`, {
     method: 'PUT',
@@ -158,6 +142,11 @@ export async function deleteCharacter(id: string) {
 
 export async function activateCharacter(id: string) {
   const res = await fetch(`${BASE}/characters/${id}/activate`, { method: 'POST' });
+  return res.json();
+}
+
+export async function fetchCharacterStory(id: string): Promise<{ success: boolean; data: import('./types').StoryState }> {
+  const res = await fetch(`${BASE}/characters/${id}/story`);
   return res.json();
 }
 

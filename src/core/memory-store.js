@@ -291,13 +291,6 @@ function getMemorySummary(agentId) {
 // ──────────────────────────────────────────────
 
 function addFact(agentId, fact) {
-  const mem = load(agentId);
-  mem.facts = mem.facts || [];
-  mem.facts.push({ fact, timestamp: Date.now() });
-  if (mem.facts.length > 100) mem.facts = mem.facts.slice(-100);
-  save(agentId, mem);
-
-  // 同时写入结构化 memories
   upsertMemory(agentId, {
     category: MEMORY_CATEGORIES.PREFERENCE,
     content: fact,

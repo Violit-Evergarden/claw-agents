@@ -2,42 +2,58 @@
 
 const llmClient = require('./llm-client');
 const memoryStore = require('./memory-store');
+const storyStateStore = require('./story-state-store');
+const { executeToolCalls } = require('./tool-runner');
 
 /**
  * 执行一次完整的 Agent LLM 调用 + tool call 循环
  * @param {Object} agent - Agent 配置对象（含 id, systemPrompt, tools）
- * @param {string|null} userMessage - 用户消息（null 表示自主心跳触发）
+ * @param {string|Object|null} input - 用户消息字符串，或 options 对象
  * @param {Object} toolExecutors - tool name -> async function(args) 映射
  * @param {Function} onLog - 日志回调 (level, message)
  * @param {string} [charId] - 可选：角色 ID，用于记忆隔离；不传则与 agentId 相同
  */
-async function runAgentTurn(agent, userMessage, toolExecutors, onLog = () => {}, charId) {
+async function runAgentTurn(agent, input, toolExecutors, onLog = () => {}, charId) {
   const { id: agentId, systemPrompt, tools = [] } = agent;
-  // charId 用于记忆隔离：不同角色各自读写独立的记忆文件
   const memoryId = charId || agentId;
   const log = (msg) => onLog('info', msg);
   const logErr = (msg) => onLog('error', msg);
 
-  // 构建消息列表：system（含回忆摘要）+ history + 本次输入
+  // 兼容旧签名 runAgentTurn(agent, userMessage, ...) 与新签名 options 对象
+  let userMessage = null;
+  let ephemeralUserContent = null;
+  let persistUserMessage = true;
+
+  if (input !== null && typeof input === 'object' && !Array.isArray(input)) {
+    userMessage = input.userMessage ?? null;
+    ephemeralUserContent = input.ephemeralUserContent ?? null;
+    persistUserMessage = input.persistUserMessage !== false;
+  } else {
+    userMessage = input;
+  }
+
+  const turnContent = userMessage || ephemeralUserContent;
+
   const history = memoryStore.getMessages(memoryId);
   const messages = [
     { role: 'system', content: buildSystemPromptWithMemory(systemPrompt, memoryId) },
     ...history,
   ];
 
-  if (userMessage) {
-    const userMsg = { role: 'user', content: userMessage };
+  if (turnContent) {
+    const userMsg = { role: 'user', content: turnContent };
     messages.push(userMsg);
-    memoryStore.appendMessage(memoryId, userMsg);
+    if (persistUserMessage && userMessage) {
+      memoryStore.appendMessage(memoryId, userMsg);
+    }
   }
 
-  // LLM 调用循环（处理多轮 tool calling）
   let iteration = 0;
   const MAX_ITER = 8;
   let finalContent = null;
+  let totalToolsExecuted = 0;
 
-  // 记录本轮新产生的对话（用于事后提炼）
-  const newTurnMessages = userMessage
+  const newTurnMessages = (persistUserMessage && userMessage)
     ? [{ role: 'user', content: userMessage }]
     : [];
 
@@ -45,14 +61,12 @@ async function runAgentTurn(agent, userMessage, toolExecutors, onLog = () => {},
     iteration++;
     const response = await llmClient.chat(messages, tools, agentId);
 
-    // 将 assistant 消息加入上下文和记忆
     messages.push(response);
     memoryStore.appendMessage(memoryId, response);
     if (response.content) {
       newTurnMessages.push({ role: 'assistant', content: response.content });
     }
 
-    // 如果没有 tool_calls，则结束循环
     if (!response.tool_calls || response.tool_calls.length === 0) {
       if (response.content) {
         log(`[${agentId}] Assistant: ${response.content}`);
@@ -61,25 +75,20 @@ async function runAgentTurn(agent, userMessage, toolExecutors, onLog = () => {},
       break;
     }
 
-    // 执行所有 tool calls
     log(`[${agentId}] Executing ${response.tool_calls.length} tool call(s)`);
-    for (const toolCall of response.tool_calls) {
-      const { id: callId, function: fn } = toolCall;
-      const args = JSON.parse(fn.arguments || '{}');
-      log(`[${agentId}] Tool call: ${fn.name}(${JSON.stringify(args)})`);
+    const { results, executedCount } = await executeToolCalls(
+      response.tool_calls,
+      toolExecutors,
+      agentId,
+      onLog
+    );
+    totalToolsExecuted += executedCount;
 
-      let result = '';
-      if (toolExecutors[fn.name]) {
-        result = await toolExecutors[fn.name](args, agentId);
-      } else {
-        result = `Unknown tool: ${fn.name}`;
-        logErr(`[${agentId}] Unknown tool: ${fn.name}`);
-      }
-
+    for (const { callId, result } of results) {
       const toolResultMsg = {
         role: 'tool',
         tool_call_id: callId,
-        content: typeof result === 'string' ? result : JSON.stringify(result),
+        content: result,
       };
       messages.push(toolResultMsg);
       memoryStore.appendMessage(memoryId, toolResultMsg);
@@ -90,8 +99,7 @@ async function runAgentTurn(agent, userMessage, toolExecutors, onLog = () => {},
     logErr(`[${agentId}] Max tool call iterations reached`);
   }
 
-  // 异步提炼长期记忆（只在有真实用户消息时触发，且内容要够实质）
-  if (userMessage && newTurnMessages.length >= 2) {
+  if (persistUserMessage && userMessage && newTurnMessages.length >= 2) {
     const totalChars = newTurnMessages.map(m => m.content || '').join('').length;
     if (totalChars >= 30) {
       setTimeout(() => {
@@ -102,16 +110,24 @@ async function runAgentTurn(agent, userMessage, toolExecutors, onLog = () => {},
     }
   }
 
-  return { content: finalContent, toolCallsMade: iteration > 1 };
+  return { content: finalContent, toolCallsMade: totalToolsExecuted > 0 };
 }
 
-/**
- * 构建含回忆摘要的 system prompt
- */
+function extractStoryHooks(agentId) {
+  const memories = memoryStore.getAllMemories(agentId);
+  return memories
+    .filter(m => {
+      if (m.importance < 2) return false;
+      return ['milestone', 'event', 'emotion'].includes(m.category);
+    })
+    .slice(-5)
+    .sort((a, b) => b.importance - a.importance)
+    .map(m => m.content);
+}
+
 function buildSystemPromptWithMemory(basePrompt, agentId) {
   const now = new Date();
   const timeStr = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-
   const memorySummary = memoryStore.getMemorySummary(agentId);
 
   let prompt = `${basePrompt}\n\n当前时间：${timeStr}`;
@@ -120,19 +136,26 @@ function buildSystemPromptWithMemory(basePrompt, agentId) {
     prompt += `\n\n${memorySummary}\n\n请自然地将这些回忆融入对话，就像你自己记得的一样，不要生硬地提及"根据记录"之类的表述。`;
   }
 
+  const hooks = extractStoryHooks(agentId);
+  if (hooks.length > 0) {
+    prompt += `\n\n【潜在剧情钩子】以下是可以用来推进剧情的记忆:\n`;
+    hooks.forEach((hook, i) => {
+      prompt += `${i + 1}. ${hook}\n`;
+    });
+    prompt += `\n请主动利用这些钩子创造新的情节发展。`;
+  }
+
+  const storySummary = storyStateStore.getSummaryForPrompt(agentId);
+  if (storySummary) {
+    prompt += `\n\n【当前剧情状态】\n${storySummary}`;
+  }
+
   return prompt;
 }
 
-/**
- * 从本轮对话中提炼长期记忆并保存
- * @param {string} agentId
- * @param {Array} turnMessages - 本轮新增的对话消息 [{ role, content }]
- * @param {Function} onLog
- */
 async function extractAndSaveMemory(agentId, turnMessages, onLog = () => {}) {
   const log = (msg) => onLog('info', msg);
 
-  // 获取已有回忆（用于去重提示）
   const existingMemories = memoryStore.getAllMemories(agentId).slice(-20);
   const existingSummary = existingMemories.length > 0
     ? existingMemories.map(m => `[${m.category}] ${m.content}`).join('\n')
@@ -174,7 +197,6 @@ ${existingSummary}
     { role: 'user', content: extractPrompt },
   ];
 
-  // 用更小的模型做记忆提炼（节省 token），输出只是 JSON 数组，512 token 足够
   const activeCfg = llmClient.getActiveProviderConfig();
   let response = await llmClient.chat(messages, [], `${agentId}-memory-extractor`, {
     model: activeCfg.memoryModel || activeCfg.model || 'gpt-4o',
@@ -184,14 +206,12 @@ ${existingSummary}
   const raw = (response.content || '').trim();
   if (!raw || raw === '[]') return;
 
-  // 解析 JSON（容错处理：LLM 可能在 content 字段里包含未转义字符导致 parse 失败）
   let items = [];
   const jsonMatch = raw.match(/\[[\s\S]*\]/);
   if (jsonMatch) {
     try {
       items = JSON.parse(jsonMatch[0]);
     } catch (parseErr) {
-      // LLM 输出了非法 JSON（常见于 content 字段含有未转义引号或换行），静默忽略本次提炼
       onLog('info', `[${agentId}] Memory extraction JSON parse failed (ignored): ${parseErr.message.slice(0, 80)}`);
       return;
     }
@@ -205,4 +225,4 @@ ${existingSummary}
   }
 }
 
-module.exports = { runAgentTurn, buildSystemPromptWithMemory, extractAndSaveMemory };
+module.exports = { runAgentTurn, buildSystemPromptWithMemory, extractAndSaveMemory, extractStoryHooks };

@@ -6,7 +6,11 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/main.js",
-    "dev": "nodemon src/main.js"
+    "dev": "nodemon src/main.js",
+    "test": "node --test tests/core.test.js",
+    "test:watch": "node --test --watch tests/core.test.js",
+    "validate": "node validate_config.js && node check_deps.js",
+    "reset-data": "node scripts/reset-data.js"
   },
   "dependencies": {
     "axios": "^1.6.7",

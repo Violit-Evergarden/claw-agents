@@ -97,28 +97,58 @@ start.bat
 ```
 src/
 ├── core/
-│   ├── agent-manager.js    # Agent 生命周期管理
-│   ├── agent-loop.js       # LLM 调用 + Tool Call 执行
-│   ├── llm-client.js       # OpenAI SDK 封装
-│   └── memory-store.js     # 对话记忆持久化
-├── scheduler/
-│   ├── cron-manager.js     # 定时任务引擎
-│   └── task-store.js       # 任务持久化
-├── adapters/
-│   ├── qq-adapter.js       # QQ Bot API 封装
-│   ├── wechat-adapter.js   # 企业微信 Webhook
-│   └── message-router.js   # 统一消息路由
+│   ├── agent-manager.js      # Agent 生命周期、心跳调度
+│   ├── agent-loop.js         # LLM 调用 + Tool Call 循环
+│   ├── tool-runner.js        # Tool 执行与 JSON 解析容错
+│   ├── llm-client.js         # OpenAI SDK 封装（含重试）
+│   ├── memory-store.js       # 对话记忆持久化
+│   ├── character-store.js    # 多角色人设管理
+│   ├── story-state-store.js  # 剧情状态（关系阶段、张力）
+│   ├── reply-dispatcher.js   # 统一消息/图片回复
+│   └── config-loader.js      # 配置加载 + 环境变量覆盖
 ├── agents/
-│   ├── violet/             # AI 女友 Agent
-│   └── assistant/          # 工作助理 Agent
-├── server/                 # Express + SSE + REST API
-└── main.js                 # 系统入口
+│   ├── registry.js           # Agent 类型注册表
+│   ├── girlfriend/           # AI 女友 Agent（多 Bot 多角色）
+│   │   ├── config.js         # 工厂函数
+│   │   ├── run-turn.js       # Turn 编排
+│   │   ├── tool-executors.js # 工具执行器
+│   │   ├── image-pipeline.js # 统一图片流水线
+│   │   └── ...
+│   └── assistant/            # 工作助理 Agent
+├── scheduler/                # 定时任务引擎
+├── adapters/                 # QQ / 微信消息适配
+├── server/                   # Express + SSE + REST API
+└── main.js                   # 系统入口
 
-dashboard/                  # React 前端面板（已构建到 dist/）
-data/                       # 持久化数据
-  ├── tasks.json            # 定时任务列表
-  └── memory/               # Agent 对话记忆
-config.json                 # 全局配置（含 API Key，不提交 git）
+dashboard/                    # React 管理面板
+data/
+  ├── characters/             # 角色定义（含 imageBasePrompt）
+  ├── memory/                 # 按 characterId 隔离的记忆
+  ├── story/                  # 剧情状态
+  └── tasks.json              # 定时任务
+config.json                   # 全局配置（可用 LLM_API_KEY 环境变量覆盖）
+.env.example                  # 环境变量示例
+```
+
+### 多 Bot 配置
+
+`config.json` 中 `bots[]` 支持可选 `type` 字段（默认 `girlfriend`）：
+
+```json
+{
+  "bots": [
+    { "agentId": "violet", "characterId": "shuangqing", "type": "girlfriend" }
+  ]
+}
+```
+
+### 开发命令
+
+```bat
+npm run dev          # 热重载启动
+npm test             # 运行单元测试
+npm run validate     # 校验配置与依赖
+npm run reset-data   # 清空 memory/story/personas（保留 characters）
 ```
 
 ---

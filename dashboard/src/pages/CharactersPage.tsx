@@ -5,9 +5,9 @@ import {
 } from 'lucide-react';
 import {
   fetchCharacters, createCharacter, updateCharacter,
-  deleteCharacter, activateCharacter, fetchMemories,
+  deleteCharacter, activateCharacter, fetchMemories, fetchCharacterStory,
 } from '../api';
-import type { Character } from '../types';
+import type { Character, StoryState } from '../types';
 
 // ── 常用人设模板 ──────────────────────────────────────────────
 const TEMPLATES = [
@@ -94,12 +94,13 @@ function Avatar({ character, size = 'md', active = false }: {
 
 // ── 角色卡片 ─────────────────────────────────────────────────
 function CharacterCard({
-  character, isActive, memoryCount,
+  character, isActive, memoryCount, storyState,
   onActivate, onEdit, onDelete,
 }: {
   character: Character;
   isActive: boolean;
   memoryCount: number;
+  storyState?: StoryState | null;
   onActivate: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -135,6 +136,14 @@ function CharacterCard({
             <span className="opacity-40">·</span>
             <span>{memoryCount} 条回忆</span>
           </div>
+          {isActive && storyState && (
+            <div className="mt-2 text-xs text-text-muted space-y-0.5">
+              <p>关系：{storyState.relationshipStage} · 张力 {storyState.tensionLevel}/5</p>
+              {storyState.activeScenario && (
+                <p className="line-clamp-1">场景：{storyState.activeScenario.goal}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 操作按钮 */}
@@ -181,11 +190,20 @@ function CharacterModal({
 }: {
   initial?: Partial<Character>;
   onClose: () => void;
-  onSave: (data: { name: string; description: string; systemPrompt: string; avatarColor: string }) => Promise<void>;
+  onSave: (data: {
+    name: string;
+    description: string;
+    systemPrompt: string;
+    avatarColor: string;
+    imageBasePrompt?: string;
+    personaEssence?: string;
+  }) => Promise<void>;
 }) {
   const [name, setName] = useState(initial?.name || '');
   const [description, setDescription] = useState(initial?.description || '');
   const [systemPrompt, setSystemPrompt] = useState(initial?.systemPrompt || '');
+  const [imageBasePrompt, setImageBasePrompt] = useState(initial?.imageBasePrompt || '');
+  const [personaEssence, setPersonaEssence] = useState(initial?.personaEssence || '');
   const [avatarColor, setAvatarColor] = useState(initial?.avatarColor || COLOR_PRESETS[0]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -199,7 +217,14 @@ function CharacterModal({
     setSaving(true);
     setError('');
     try {
-      await onSave({ name: name.trim(), description, systemPrompt, avatarColor });
+      await onSave({
+        name: name.trim(),
+        description,
+        systemPrompt,
+        avatarColor,
+        imageBasePrompt,
+        personaEssence,
+      });
       onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '保存失败');
@@ -315,6 +340,29 @@ function CharacterModal({
             />
           </div>
 
+          <div>
+            <label className="text-text-secondary text-xs mb-1.5 block">图片外貌描述 (imageBasePrompt)</label>
+            <textarea
+              value={imageBasePrompt}
+              onChange={e => setImageBasePrompt(e.target.value)}
+              placeholder="用于图片生成的角色外貌描述（中文）"
+              rows={3}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-text-primary text-sm resize-none outline-none focus:border-primary/50 transition-colors placeholder:text-text-muted font-mono leading-relaxed"
+              spellCheck={false}
+            />
+          </div>
+
+          <div>
+            <label className="text-text-secondary text-xs mb-1.5 block">图片气质关键词 (personaEssence)</label>
+            <input
+              type="text"
+              value={personaEssence}
+              onChange={e => setPersonaEssence(e.target.value)}
+              placeholder="如：冷艳高傲、强势占有欲"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-text-primary text-sm outline-none focus:border-primary/50 transition-colors placeholder:text-text-muted"
+            />
+          </div>
+
           {error && (
             <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 rounded-xl px-4 py-3 border border-red-500/20">
               <AlertCircle size={14} />
@@ -395,6 +443,7 @@ export default function CharactersPage() {
   const [editTarget, setEditTarget] = useState<Character | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<Character | null>(null);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const [storyStates, setStoryStates] = useState<Record<string, StoryState | null>>({});
 
   const load = async () => {
     setLoading(true);
@@ -413,6 +462,17 @@ export default function CharactersPage() {
       }
     }));
     setMemoryCounts(counts);
+
+    const stories: Record<string, StoryState | null> = {};
+    await Promise.all((res.data || []).map(async (c: Character) => {
+      try {
+        const story = await fetchCharacterStory(c.id);
+        stories[c.id] = story.data || null;
+      } catch {
+        stories[c.id] = null;
+      }
+    }));
+    setStoryStates(stories);
     setLoading(false);
   };
 
@@ -428,13 +488,19 @@ export default function CharactersPage() {
     }
   };
 
-  const handleCreate = async (data: { name: string; description: string; systemPrompt: string; avatarColor: string }) => {
+  const handleCreate = async (data: {
+    name: string; description: string; systemPrompt: string; avatarColor: string;
+    imageBasePrompt?: string; personaEssence?: string;
+  }) => {
     const res = await createCharacter(data);
     if (!res.success) throw new Error(res.error || '创建失败');
     await load();
   };
 
-  const handleUpdate = async (data: { name: string; description: string; systemPrompt: string; avatarColor: string }) => {
+  const handleUpdate = async (data: {
+    name: string; description: string; systemPrompt: string; avatarColor: string;
+    imageBasePrompt?: string; personaEssence?: string;
+  }) => {
     if (!editTarget || editTarget === 'new') return;
     const res = await updateCharacter(editTarget.id, data);
     if (!res.success) throw new Error(res.error || '更新失败');
@@ -459,8 +525,8 @@ export default function CharactersPage() {
             <Users size={16} className="text-white" />
           </div>
           <div>
-            <h2 className="font-semibold text-text-primary leading-none">角色切换</h2>
-            <p className="text-xs text-text-muted mt-0.5">每个角色拥有独立记忆，互不干扰</p>
+            <h2 className="font-semibold text-text-primary leading-none">角色管理</h2>
+            <p className="text-xs text-text-muted mt-0.5">编辑人设、图片配置与剧情状态</p>
           </div>
         </div>
         <div className="ml-auto flex items-center gap-3">
@@ -505,6 +571,7 @@ export default function CharactersPage() {
                 character={c}
                 isActive={c.id === activeCharacterId}
                 memoryCount={memoryCounts[c.id] ?? 0}
+                storyState={storyStates[c.id]}
                 onActivate={() => switchingId ? undefined : handleActivate(c.id)}
                 onEdit={() => setEditTarget(c)}
                 onDelete={() => setDeleteTarget(c)}

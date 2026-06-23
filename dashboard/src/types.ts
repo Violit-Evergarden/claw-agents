@@ -67,8 +67,29 @@ export interface Character {
   description: string;
   systemPrompt: string;
   avatarColor: string;
+  imageBasePrompt?: string;
+  personaEssence?: string;
+  appearanceKeywords?: string[];
   createdAt: number;
   updatedAt: string;
+}
+
+export interface StoryState {
+  relationshipStage: string;
+  tensionLevel: number;
+  activeScenario: {
+    scenarioType: string;
+    context: string;
+    goal: string;
+    startedAt: string;
+  } | null;
+  scenarioHistory: Array<{
+    scenarioType: string;
+    context: string;
+    goal: string;
+    startedAt: string;
+  }>;
+  lastUpdated: string | null;
 }
 
 // ── LLM 模型设置 ──

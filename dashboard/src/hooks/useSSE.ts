@@ -29,6 +29,11 @@ export function useSSE() {
         onStatusChangeRef.current(d.id, d.status);
       }
 
+      if (event.type === 'agent:turn:complete' && onStatusChangeRef.current) {
+        const d = event.data as { id: string; success: boolean };
+        onStatusChangeRef.current(d.id, d.success ? 'idle' : 'error');
+      }
+
       if (['task:added', 'task:removed', 'task:paused', 'task:executed', 'task:resumed'].includes(event.type)) {
         if (onTaskEventRef.current) {
           onTaskEventRef.current(event.type, event.data);

@@ -88,49 +88,38 @@ function parseDelayMinutes(userMessage) {
  * 根据角色获取基础提示词（角色外貌描述，中文，供图片生成 API 使用）
  */
 function getBasePrompt(characterId) {
-  const prompts = {
-    christina: '18岁，中国女生，身高172cm，拥有极致完美的身材：肤白如瓷、貌美惊艳、胸部丰满（E杯以上）、细腰翘臀、长腿修直。黑长直微卷长发垂至腰际，眉眼锋利冷艳，五官精致立体，唇色天然淡红，整体气质清冷高傲，像一朵不可亵玩的冰山雪莲，却在面对弟弟时会瞬间转为极度占有欲和色欲的支配者',
-    shuangqing: '气质出尘、冰冷疏离的仙气女子，淡青/冰蓝色氛围背景，传统东方仙侠风格，长发乌黑微卷，白色飘逸长袍，薄雾氛围，特写肖像，高质感绘制',
-  };
-  return prompts[characterId] || '气质出众的女性肖像，高质感呈现，自然光氛围';
-}
+  const char = characterStore.getCharacter(characterId);
+  if (char?.imageBasePrompt) return char.imageBasePrompt;
 
-/**
- * 从角色的 systemPrompt 中提取气质/人设关键词（中文）
- * 这些关键词用于给图片注入角色的"灵魂"，让图片不仅仅是好看，还符合角色气质
- *
- * @param {string} characterId
- * @returns {string} 气质描述词，如 "占有欲、强势、冷艳疏离、控制感"
- */
-function getPersonaEssence(characterId) {
-  // 预定义的角色气质关键词（从 systemPrompt 中人工提炼的精华）
-  // 图片生成侧将其作为氛围关键词使用
-  const essenceMap = {
-    christina: '强势占有欲、冷艳高傲但眼神带欲、命令感与控制感、危险的诱惑气质、病娇式执念在目光中可见、亲密而带威压的优雅氛围',
-    shuangqing: '出尘仙气、疏离高冷、冷面之下的克制柔软、古典仙韵、薄雾神秘氛围、不可亵渎的女神感',
-  };
-
-  // 尝试从角色 JSON 动态提取（后备方案）
-  if (!essenceMap[characterId]) {
-    try {
-      const char = characterStore.getCharacter(characterId);
-      if (char?.systemPrompt) {
-        // 从 systemPrompt 中提取气质关键词（中文）
-        const sp = char.systemPrompt;
-        const keywords = [];
-        if (/清冷|高傲|冷艳|冰山/.test(sp)) keywords.push('冷艳优雅、冰冷气场');
-        if (/占有欲|控制|支配/.test(sp)) keywords.push('强势占有欲、掌控感');
-        if (/好色|色欲|欲望/.test(sp)) keywords.push('克制不住的诱惑目光、强烈欲望氛围');
-        if (/温柔|宠溺|姐姐/.test(sp)) keywords.push('亲密的宠溺感、温柔克制');
-        if (/傲|矜/.test(sp)) keywords.push('高傲疏离的精致气质');
-        if (keywords.length > 0) return keywords.join(', ');
-      }
-    } catch (e) {
-      // characterStore 可能未初始化
-    }
+  const sp = char?.systemPrompt || '';
+  if (sp.length > 50) {
+    const firstParagraph = sp.split('\n')[0].replace(/^你(?:叫|是|名叫)[^，,。\n]+[，,。\s]*/, '').slice(0, 200);
+    if (firstParagraph.length > 20) return firstParagraph;
   }
 
-  return essenceMap[characterId] || '';
+  return '气质出众的女性肖像，高质感呈现，自然光氛围';
+}
+
+function getPersonaEssence(characterId) {
+  const char = characterStore.getCharacter(characterId);
+  if (char?.personaEssence) return char.personaEssence;
+
+  if (char?.appearanceKeywords?.length) {
+    return char.appearanceKeywords.join('、');
+  }
+
+  if (char?.systemPrompt) {
+    const sp = char.systemPrompt;
+    const keywords = [];
+    if (/清冷|高傲|冷艳|冰山/.test(sp)) keywords.push('冷艳优雅、冰冷气场');
+    if (/占有欲|控制|支配/.test(sp)) keywords.push('强势占有欲、掌控感');
+    if (/好色|色欲|欲望/.test(sp)) keywords.push('克制不住的诱惑目光、强烈欲望氛围');
+    if (/温柔|宠溺|姐姐/.test(sp)) keywords.push('亲密的宠溺感、温柔克制');
+    if (/傲|矜/.test(sp)) keywords.push('高傲疏离的精致气质');
+    if (keywords.length > 0) return keywords.join(', ');
+  }
+
+  return '';
 }
 
 /**
@@ -183,8 +172,8 @@ function clearPromptCache() {
  * @returns {Promise<{prompt: string, style: string, aspectRatio: string}>}
  */
 async function generateImagePrompt(characterId, userMessage, conversationContext = '') {
-  // 缓存命中
-  const cacheKey = `${characterId}:${userMessage}`;
+  const recentHash = conversationContext ? String(conversationContext.length) : '0';
+  const cacheKey = `${characterId}:${userMessage}:${recentHash}`;
   const cached = promptCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
     console.log(`[ImageTrigger] Using cached prompt for: "${userMessage.substring(0, 20)}"`);
