@@ -11,7 +11,6 @@ const charactersRouter = require('./routes/characters');
 const settingsRouter = require('./routes/settings');
 const messageRouter = require('../adapters/message-router');
 const agentManager = require('../core/agent-manager');
-const config = require('../../config.json');
 
 /**
  * 创建 Express 服务
