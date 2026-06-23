@@ -3,7 +3,7 @@
 const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
-const config = require('../../../config.json');
+const { loadConfig } = require('../../core/config-loader');
 
 /**
  * Grok 图像生成客户端
@@ -11,19 +11,19 @@ const config = require('../../../config.json');
 class GrokImageGenerator {
   constructor() {
     this.provider = 'grok';
-    this.apiKey = config.providers.grok.apiKey;
-    this.baseURL = config.providers.grok.baseURL;
-    this.proxy = config.providers.grok.proxy;
-    
-    const opts = { apiKey: this.apiKey, baseURL: this.baseURL };
-    if (this.proxy) {
-      const { HttpsProxyAgent } = require('https-proxy-agent');
-      opts.httpAgent = new HttpsProxyAgent(this.proxy);
-    }
-    
-    this.client = new OpenAI(opts);
     this.imageDir = path.join(__dirname, '../../../data/images');
     this.ensureImageDir();
+  }
+
+  _getClient() {
+    const config = loadConfig();
+    const grok = config.providers?.grok || {};
+    const opts = { apiKey: grok.apiKey, baseURL: grok.baseURL };
+    if (grok.proxy) {
+      const { HttpsProxyAgent } = require('https-proxy-agent');
+      opts.httpAgent = new HttpsProxyAgent(grok.proxy);
+    }
+    return new OpenAI(opts);
   }
 
   ensureImageDir() {
@@ -51,7 +51,7 @@ class GrokImageGenerator {
       
       console.log(`[ImageGenerator] Generating image: "${stylePrompt}" (aspect_ratio: ${grokAspectRatio})`);
       
-      const response = await this.client.images.generate({
+      const response = await this._getClient().images.generate({
         model: 'grok-imagine-image',
         prompt: stylePrompt,
         n: 1,

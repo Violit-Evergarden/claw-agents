@@ -55,7 +55,10 @@ router.put('/llm/apikey', (req, res) => {
   }
   try {
     llmClient.updateProviderApiKey(provider, apiKey);
-    res.json({ success: true, message: `API key updated for provider: ${provider}` });
+    res.json({
+      success: true,
+      message: `API key updated for provider: ${provider}（当前进程有效；持久化请设置环境变量 LLM_API_KEY_${provider.toUpperCase()}）`,
+    });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }

@@ -1,0 +1,64 @@
+{
+  "llm": {
+    "baseURL": "https://api.x.ai/v1",
+    "model": "grok-4-fast-reasoning",
+    "memoryModel": "grok-3-mini",
+    "maxTokens": 2048,
+    "activeProvider": "grok"
+  },
+  "providers": {
+    "deepseek": {
+      "name": "DeepSeek",
+      "baseURL": "https://api.deepseek.com/v1",
+      "models": ["deepseek-chat", "deepseek-reasoner"],
+      "defaultModel": "deepseek-chat",
+      "memoryModel": "deepseek-chat"
+    },
+    "grok": {
+      "name": "Grok (xAI)",
+      "baseURL": "https://api.x.ai/v1",
+      "proxy": null,
+      "models": [
+        "grok-3",
+        "grok-3-mini",
+        "grok-4-fast-reasoning"
+      ],
+      "defaultModel": "grok-4-fast-reasoning",
+      "memoryModel": "grok-3-mini"
+    },
+    "openai": {
+      "name": "OpenAI",
+      "baseURL": "https://api.openai.com/v1",
+      "models": ["gpt-4o", "gpt-4o-mini"],
+      "defaultModel": "gpt-4o",
+      "memoryModel": "gpt-4o-mini"
+    }
+  },
+  "diversity": {
+    "temperature": 0.65,
+    "top_p": 0.9,
+    "frequency_penalty": 0.3,
+    "presence_penalty": 0.2
+  },
+  "server": {
+    "port": 3000
+  },
+  "scheduler": {
+    "enabled": false
+  },
+  "bots": [
+    {
+      "appId": "YOUR_QQ_APP_ID",
+      "agentId": "violet",
+      "characterId": "shuangqing",
+      "heartbeatInterval": 600000,
+      "enabled": true
+    }
+  ],
+  "agents": {
+    "assistant": {
+      "enabled": true,
+      "platform": "console"
+    }
+  }
+}

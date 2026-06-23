@@ -319,7 +319,8 @@ export default function ModelSettingsPage() {
         <ul className="space-y-1 list-disc list-inside">
           <li>切换 Provider 后立即生效，无需重启服务</li>
           <li>Grok API Key 可在 <a href="https://console.x.ai" target="_blank" rel="noreferrer" className="text-primary hover:underline">console.x.ai</a> 申请</li>
-          <li>API Key 保存在本地 config.json，不会上传</li>
+          <li>生产环境请通过环境变量配置密钥（见项目根目录 <code className="text-text-secondary">.env.example</code>）</li>
+          <li>面板保存的 Key 仅当前进程有效，重启后需配置 <code className="text-text-secondary">LLM_API_KEY_*</code></li>
           <li>记忆提炼模型建议选择轻量版（节省 token）</li>
         </ul>
       </div>

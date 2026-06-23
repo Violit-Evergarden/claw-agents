@@ -39,6 +39,19 @@ describe('tool-runner', () => {
   });
 });
 
+describe('config-loader', () => {
+  it('prefers LLM_API_KEY_{PROVIDER} env var', () => {
+    const prev = process.env.LLM_API_KEY_GROK;
+    process.env.LLM_API_KEY_GROK = 'env-test-key-abcdefghij';
+    delete require.cache[require.resolve('../src/core/config-loader')];
+    const { getProviderApiKey } = require('../src/core/config-loader');
+    assert.strictEqual(getProviderApiKey('grok'), 'env-test-key-abcdefghij');
+    if (prev === undefined) delete process.env.LLM_API_KEY_GROK;
+    else process.env.LLM_API_KEY_GROK = prev;
+    delete require.cache[require.resolve('../src/core/config-loader')];
+  });
+});
+
 describe('story-state-store', () => {
   const testCharId = '__test_story__';
   const testFile = path.join(__dirname, '../data/story', `${testCharId}.json`);

@@ -1,34 +1,23 @@
 'use strict';
 
 const OpenAI = require('openai');
-const fs = require('fs');
-const path = require('path');
 const { HttpsProxyAgent } = require('https-proxy-agent');
-
-const CONFIG_PATH = path.join(__dirname, '../../config.json');
-
-/**
- * 读取最新配置（每次从磁盘读，支持运行时热更新）
- */
-function loadConfig() {
-  return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-}
-
-/**
- * 保存配置到磁盘
- */
-function saveConfig(config) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
-}
+const {
+  loadConfig,
+  saveConfig,
+  setProviderApiKey,
+  hasProviderApiKey,
+} = require('./config-loader');
 
 // 客户端实例缓存（按 baseURL+apiKey 缓存，避免重复创建）
 const clientCache = new Map();
 
+function clearClientCache() {
+  clientCache.clear();
+}
+
 /**
  * 获取或创建 OpenAI 兼容客户端
- * @param {string} apiKey
- * @param {string} baseURL
- * @param {string} [proxy]  - 代理地址，如 "http://127.0.0.1:7890"
  */
 function getClient(apiKey, baseURL, proxy) {
   const cacheKey = `${baseURL}::${apiKey}::${proxy || ''}`;
@@ -45,7 +34,6 @@ function getClient(apiKey, baseURL, proxy) {
 
 /**
  * 获取当前激活的 provider 配置
- * 优先读 providers[activeProvider]，fallback 到顶层 llm 字段（兼容旧配置）
  */
 function getActiveProviderConfig() {
   const config = loadConfig();
@@ -65,7 +53,6 @@ function getActiveProviderConfig() {
     };
   }
 
-  // fallback：使用顶层 llm 配置
   return {
     provider: 'custom',
     apiKey: config.llm.apiKey,
@@ -94,15 +81,13 @@ function getProviders() {
       models: p.models || [],
       defaultModel: p.defaultModel || '',
       memoryModel: p.memoryModel || '',
-      hasApiKey: !!(p.apiKey && !p.apiKey.includes('YOUR_') && p.apiKey.length > 10),
+      hasApiKey: hasProviderApiKey(id),
     })),
   };
 }
 
 /**
  * 切换当前激活的 provider 和/或模型
- * @param {string} providerId - provider 名称（如 'grok', 'deepseek'）
- * @param {Object} [opts] - 可选：{ model, memoryModel, apiKey }
  */
 function switchProvider(providerId, opts = {}) {
   const config = loadConfig();
@@ -112,17 +97,11 @@ function switchProvider(providerId, opts = {}) {
     throw new Error(`Provider "${providerId}" not found in config. Available: ${Object.keys(providers).join(', ')}`);
   }
 
-  // 更新顶层 llm 字段（保持向下兼容）
   config.llm.activeProvider = providerId;
-  config.llm.apiKey = opts.apiKey || providers[providerId].apiKey;
   config.llm.baseURL = providers[providerId].baseURL;
   config.llm.model = opts.model || providers[providerId].defaultModel;
   config.llm.memoryModel = opts.memoryModel || providers[providerId].memoryModel || providers[providerId].defaultModel;
 
-  // 如果提供了新的 apiKey，同步更新 providers 里的配置
-  if (opts.apiKey) {
-    providers[providerId].apiKey = opts.apiKey;
-  }
   if (opts.model) {
     providers[providerId].defaultModel = opts.model;
   }
@@ -131,12 +110,13 @@ function switchProvider(providerId, opts = {}) {
   }
 
   saveConfig(config);
+  clearClientCache();
   console.log(`[LLM] Switched to provider: ${providerId}, model: ${config.llm.model}`);
   return getProviders();
 }
 
 /**
- * 更新指定 provider 的 API Key
+ * 更新指定 provider 的 API Key（当前进程有效；持久化请配置环境变量）
  */
 function updateProviderApiKey(providerId, apiKey) {
   const config = loadConfig();
@@ -146,15 +126,9 @@ function updateProviderApiKey(providerId, apiKey) {
     throw new Error(`Provider "${providerId}" not found`);
   }
 
-  providers[providerId].apiKey = apiKey;
-
-  // 如果当前激活的就是该 provider，同步更新顶层 llm.apiKey
-  if (config.llm?.activeProvider === providerId) {
-    config.llm.apiKey = apiKey;
-  }
-
-  saveConfig(config);
-  console.log(`[LLM] Updated API key for provider: ${providerId}`);
+  setProviderApiKey(providerId, apiKey);
+  clearClientCache();
+  console.log(`[LLM] Updated API key for provider: ${providerId} (runtime only; set LLM_API_KEY_${providerId.toUpperCase()} to persist)`);
 }
 
 /**

@@ -6,24 +6,24 @@
 
 ## 快速启动
 
-### 1. 配置 LLM API Key
+### 1. 配置
 
-编辑 `config.json`，填写你的 LLM API Key：
-
-```json
-{
-  "llm": {
-    "apiKey": "sk-xxxxxxxxxxxx",
-    "baseURL": "https://api.openai.com/v1",
-    "model": "gpt-4o"
-  }
-}
+```bat
+copy config.example.json config.json
+copy .env.example .env
 ```
 
-> 支持任意 OpenAI 兼容 API，例如：
-> - OpenAI: `https://api.openai.com/v1`
-> - 国内代理/中转：替换 baseURL 即可
-> - 硅基流动、DeepSeek、智谱等兼容接口
+编辑 `.env`，填入 API Key 和 QQ Bot Secret（**密钥只放环境变量，不要写入 config.json**）：
+
+```env
+LLM_API_KEY_GROK=xai-xxxxxxxx
+LLM_API_KEY_DEEPSEEK=sk-xxxxxxxx
+QQ_APP_SECRET_0=your-qq-app-secret
+```
+
+`config.json` 仅保留模型、端口、Bot 列表等非敏感配置。完整变量说明见 `.env.example`。
+
+> 支持任意 OpenAI 兼容 API，在 `config.json` 的 `providers` 中配置 baseURL 和模型列表即可。
 
 ### 2. 启动系统
 
@@ -39,7 +39,7 @@ start.bat
 
 ### 前置条件
 
-你已有 QQ 开放平台账号，AppID = `1903486211`，AppSecret 已配置在 config.json。
+你已有 QQ 开放平台账号。AppSecret 通过环境变量 `QQ_APP_SECRET_0`（或 `QQ_APP_SECRET_{agentId}`）配置，AppId 写在 `config.json` 的 `bots[]` 中。
 
 ### 步骤一：配置 Webhook 回调地址
 
@@ -126,8 +126,10 @@ data/
   ├── memory/                 # 按 characterId 隔离的记忆
   ├── story/                  # 剧情状态
   └── tasks.json              # 定时任务
-config.json                   # 全局配置（可用 LLM_API_KEY 环境变量覆盖）
-.env.example                  # 环境变量示例
+config.example.json           # 非敏感配置模板（复制为 config.json）
+.env.example                  # 密钥环境变量模板（复制为 .env）
+config.json                   # 本地运行时配置（gitignore，不含密钥）
+.env                          # 本地密钥（gitignore）
 ```
 
 ### 多 Bot 配置
@@ -182,7 +184,20 @@ Violet 拥有以下工具：
 ## 常见问题
 
 **Q: LLM 调用失败**  
-A: 检查 config.json 中的 apiKey 和 baseURL 是否正确。
+A: 检查 `.env` 或云服务器环境变量中的 `LLM_API_KEY_*` 是否正确，以及 `config.json` 中 baseURL 是否匹配。
+
+---
+
+## 云服务器部署
+
+1. 克隆仓库，安装依赖：`npm install && cd dashboard && npm install && npm run build && cd ..`
+2. 复制配置：`cp config.example.json config.json`
+3. 在云平台（或 systemd / Docker）注入环境变量，参考 `.env.example`：
+   - `LLM_API_KEY_GROK` / `LLM_API_KEY_DEEPSEEK` 等
+   - `QQ_APP_SECRET_0` 等
+   - 可选 `SCHEDULER_ENABLED=0` 禁用定时任务
+4. 启动：`npm start`（默认端口 3000，可在 config.json 修改）
+5. 确保 Webhook 端口对公网可访问，或将反向代理指向 `/webhook/qq/0`
 
 **Q: QQ 消息收不到**  
 A: 确认 Webhook URL 已配置，且端口 3000 对外可访问（或用 ngrok）。

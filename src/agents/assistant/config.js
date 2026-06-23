@@ -3,6 +3,7 @@
 const agentLoop = require('../../core/agent-loop');
 const memoryStore = require('../../core/memory-store');
 const { sendTextReply } = require('../../core/reply-dispatcher');
+const { loadConfig } = require('../../core/config-loader');
 
 const AGENT_ID = 'assistant';
 
@@ -65,7 +66,7 @@ function buildToolExecutors(agentConfig) {
 }
 
 function createAssistantAgent() {
-  const config = require('../../../config.json');
+  const config = loadConfig();
   const agentConfig = {
     id: AGENT_ID,
     name: '工作助理',

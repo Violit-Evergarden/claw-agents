@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const config = require('../../config.json');
+const { loadConfig } = require('../core/config-loader');
 
 /**
  * 发送企业微信群机器人消息
@@ -9,7 +9,8 @@ const config = require('../../config.json');
  * @param {string} webhookUrl - 可选，覆盖 config 中的 webhook URL
  */
 async function sendMessage(content, webhookUrl) {
-  const url = webhookUrl || config.wechat.webhookUrl;
+  const config = loadConfig();
+  const url = webhookUrl || config.wechat?.webhookUrl;
   if (!url) {
     console.warn('[WeChat] webhookUrl not configured, skipping');
     return;
